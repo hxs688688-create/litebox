@@ -1,0 +1,32 @@
+const UPSTREAM = 'https://tts.wangwangit.com';
+export function json(data, init = {}) {
+  const headers = new Headers(init.headers || {});
+  headers.set('content-type', 'application/json; charset=utf-8');
+  headers.set('cache-control', 'no-store');
+  return new Response(JSON.stringify(data), { ...init, headers });
+}
+export async function fetchJson(url, init = {}, timeoutMs = 7000) {
+  const c = new AbortController();
+  const t = setTimeout(() => c.abort(), timeoutMs);
+  try {
+    const r = await fetch(url, { ...init, signal: c.signal, cache: 'no-store' });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return await r.json();
+  } finally { clearTimeout(t); }
+}
+export function isIPv4(x) { return /^(?:\d{1,3}\.){3}\d{1,3}$/.test(x) && x.split('.').every(v => +v >= 0 && +v <= 255); }
+export function isIPv6(x) { return /^[0-9a-f:]+$/i.test(x) && x.includes(':'); }
+export function isIP(x) { return isIPv4(x) || isIPv6(x); }
+export async function proxyUpstream(request, path, accept) {
+  if (request.method !== 'POST') return json({ error: { message: 'Method Not Allowed' } }, { status: 405 });
+  try {
+    const h = new Headers(request.headers); h.delete('host'); h.delete('content-length');
+    h.set('origin', UPSTREAM); h.set('referer', UPSTREAM + '/'); h.set('accept', accept);
+    const r = await fetch(UPSTREAM + path, { method: 'POST', headers: h, body: request.body });
+    const oh = new Headers(r.headers); oh.delete('content-length'); oh.set('cache-control', 'no-store'); oh.set('x-litebox-proxy', '1');
+    return new Response(r.body, { status: r.status, statusText: r.statusText, headers: oh });
+  } catch (_) {
+    const msg = path.endsWith('/speech') ? '语音合成服务暂时不可达，请稍后重试' : '语音识别服务暂时不可达，请稍后重试';
+    return json({ error: { message: msg } }, { status: 502 });
+  }
+}
