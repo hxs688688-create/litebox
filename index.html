@@ -298,7 +298,7 @@ header{
 }
 .chip.on .ch-n{background:rgba(255,255,255,.25);color:#fff}
 .chip.on .ch-ic{transform:scale(1.08)}
-.cat-sec{scroll-margin-top:136px}
+.cat-sec{scroll-margin-top:168px}
 #chipBar .chip:first-child{margin-left:2px}
 #chipBar .chip:last-child{margin-right:2px}
 #wpTab{scrollbar-width:none}
@@ -558,26 +558,50 @@ footer .ver{
 .rv-grid{display:grid;grid-template-columns:400px 1fr;gap:20px;align-items:start}
 .rv-form .f2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .rv-form .f2 .field{margin-bottom:14px}
+.rv-tpls{display:flex;gap:6px;background:var(--card2);padding:5px;border-radius:12px;margin-bottom:16px}
+.rv-tpls button{flex:1;border:0;background:transparent;color:var(--fg2);font-weight:700;font-size:13px;padding:8px 4px;border-radius:8px;cursor:pointer;transition:.18s}
+.rv-tpls button:hover{color:var(--fg)}
+.rv-tpls button.on{background:var(--brand1);color:#fff;box-shadow:var(--shadow-sm)}
 .rv-paper{
-  background:#fff;color:#1f2430;width:100%;max-width:660px;margin:0 auto;
-  min-height:880px;padding:52px 56px;border-radius:4px;
+  --ac:#4f6ef7;
+  background:#fff;color:#1f2430;width:100%;max-width:680px;margin:0 auto;
+  min-height:880px;padding:50px 54px;border-radius:4px;
   box-shadow:0 12px 40px rgba(0,0,0,.16);
-  font-family:Georgia,'Times New Roman','Songti SC','SimSun',serif;
-  line-height:1.7;
+  font-family:'Helvetica Neue','PingFang SC','Microsoft YaHei',Arial,sans-serif;
+  line-height:1.7;font-size:13px;
 }
-.rv-paper h1{font-size:30px;font-weight:900;letter-spacing:3px;color:#1f2430}
-.rv-paper .rv-intent{font-size:14px;color:#4f6ef7;font-weight:700;margin-top:4px;letter-spacing:1px}
-.rv-paper .rv-contact{font-size:12.5px;color:#6b7280;margin-top:10px;padding-bottom:14px;border-bottom:2px solid #1f2430}
-.rv-paper h2{font-size:15px;font-weight:900;letter-spacing:2px;margin:20px 0 8px;color:#1f2430;display:flex;align-items:center;gap:8px}
-.rv-paper h2::before{content:"";width:5px;height:15px;background:#4f6ef7;border-radius:2px}
+.rv-paper .rv-top{margin-bottom:6px}
+.rv-paper .rv-name{font-size:30px;font-weight:900;letter-spacing:1px;color:#1f2430;margin:0}
+.rv-paper .rv-intent{font-size:14px;font-weight:700;margin-top:4px;color:var(--ac)}
+.rv-paper .rv-contact{font-size:12.5px;color:#6b7280;margin-top:10px;display:flex;flex-wrap:wrap;gap:4px 16px}
+.rv-paper h2{font-size:14px;font-weight:900;letter-spacing:2px;margin:20px 0 8px;color:#1f2430;display:flex;align-items:center;gap:8px}
+.rv-paper h2::before{content:"";width:5px;height:15px;border-radius:2px;background:var(--ac)}
 .rv-paper .rv-edu{font-size:13.5px}
 .rv-paper .rv-edu b{font-size:14.5px}
 .rv-paper .rv-edu .rv-line2{color:#6b7280;font-size:12.5px;margin-top:2px}
 .rv-paper ul{list-style:none;margin:0;padding:0}
 .rv-paper li{font-size:13px;padding:4px 0 4px 16px;position:relative}
-.rv-paper li::before{content:"";position:absolute;left:2px;top:12px;width:5px;height:5px;border-radius:50%;background:#4f6ef7}
-.rv-paper .rv-summary{font-size:13px;color:#374151;white-space:pre-wrap}
+.rv-paper li::before{content:"";position:absolute;left:2px;top:12px;width:5px;height:5px;border-radius:50%;background:var(--ac)}
+.rv-paper .rv-summary{font-size:13px;color:#374151;white-space:pre-wrap;margin:0}
 .rv-paper .rv-empty{color:#9ca3af;font-size:13px;font-style:italic}
+/* 现代模板 */
+.rv-paper.rv-tpl-modern{--ac:#0ea5a4}
+.rv-paper.rv-tpl-modern .rv-top{border-bottom:3px solid var(--ac);padding-bottom:14px}
+.rv-paper.rv-tpl-modern .rv-name{font-size:34px}
+.rv-paper.rv-tpl-modern h2{border-bottom:1.5px solid #eef2f2;padding-bottom:5px}
+/* 左栏模板 */
+.rv-paper.rv-tpl-left{--ac:#7c3aed}
+.rv-paper.rv-tpl-left .rv-cols{display:grid;grid-template-columns:180px 1fr;gap:26px;margin-top:18px}
+.rv-paper.rv-tpl-left .rv-side{background:#faf7ff;border-radius:10px;padding:16px 14px;align-self:start}
+.rv-paper.rv-tpl-left .rv-side h2{margin-top:14px}
+.rv-paper.rv-tpl-left .rv-side .rv-contact{flex-direction:column;gap:6px;color:#4b5563;margin-top:0}
+.rv-paper.rv-tpl-left .rv-side .rv-contact span{display:block}
+/* 紧凑模板 */
+.rv-paper.rv-tpl-compact{--ac:#475569;font-size:12px;line-height:1.55;padding:34px 38px;min-height:0}
+.rv-paper.rv-tpl-compact .rv-name{font-size:24px}
+.rv-paper.rv-tpl-compact h2{margin:12px 0 5px;font-size:12.5px;letter-spacing:1px}
+.rv-paper.rv-tpl-compact li{padding:2px 0 2px 14px}
+.rv-paper.rv-tpl-compact li::before{top:9px}
 @media print{
   body *{visibility:hidden}
   #rvPaper,#rvPaper *{visibility:visible}
@@ -1210,8 +1234,8 @@ html{scroll-padding-bottom:86px}
 /* ================================================================
  * v2.6 全站交互与视觉收口
  * ================================================================ */
-html{scroll-behavior:smooth;overscroll-behavior-y:none;scrollbar-gutter:stable}body{overscroll-behavior-y:none;scroll-padding-bottom:120px;padding-bottom:118px;-webkit-font-smoothing:antialiased}body.wp-lock{overflow:hidden;touch-action:none}body.scroll-lock{overflow:hidden;overscroll-behavior:none}.sheet{overscroll-behavior:contain}.page.active{animation:lbPageIn .32s cubic-bezier(.22,1,.36,1)}@keyframes lbPageIn{from{opacity:0;transform:translateY(12px) scale(.992)}to{opacity:1;transform:none}}button,.btn,.chip,.wall-cat,.wall-card,.tabbar button,.back,.sw-clear{touch-action:manipulation;-webkit-tap-highlight-color:transparent}.btn:active,.back:active,.tabbar button:active,.chip:active,.wall-cat:active,.wall-card:active,.tool-card:active{transform:scale(.965)!important;transition-duration:.06s}.tool-card{transition:transform .18s cubic-bezier(.22,1,.36,1),box-shadow .18s}.tabbar{bottom:calc(-16px + env(safe-area-inset-bottom));transform:translateX(-50%) translateY(15px);opacity:.985}.tabbar button{height:50px;min-width:54px}.home-cat-nav{position:sticky;top:0;z-index:35}.chip-bar{scroll-behavior:smooth;overscroll-behavior-x:contain}.tool-grid{grid-template-columns:repeat(auto-fill,minmax(188px,1fr));gap:12px}.tool-card{padding:15px 14px;border-radius:16px;min-height:126px}.tool-card .ic{width:34px;height:34px;font-size:18px;margin-bottom:9px}.tool-card h3{font-size:13px}.tool-card p{font-size:11px;line-height:1.45}.home-wrap,.page-inner{contain:layout paint}.tts-brand{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;margin-bottom:14px;border:1px solid var(--line);border-radius:15px;background:linear-gradient(135deg,var(--card2),var(--card))}.tts-brand b{display:block;font-size:15px}.tts-brand span{display:block;margin-top:3px;font-size:11px;color:var(--fg3)}.tts-controls{display:grid;grid-template-columns:1.4fr .8fr .8fr;gap:12px}.tts-actions{display:flex;gap:9px;margin-top:4px}.tts-actions .btn-main{flex:1.3}.tts-count{text-align:right;color:var(--fg3);font-size:10px;margin-top:4px}.ip-fast-links{display:flex;justify-content:flex-end;margin-top:10px}.wallpaper-app{max-width:1180px;margin:0 auto}.wall-hero{height:360px;border-radius:22px;overflow:hidden;position:relative;background:var(--card2);box-shadow:var(--shadow-sm)}.wall-hero-link{display:block;position:relative;height:100%;color:#fff;text-decoration:none}.wall-hero img{width:100%;height:100%;display:block;object-fit:cover}.wall-hero-grad{position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.05) 35%,rgba(0,0,0,.78) 100%)}.wall-hero-copy{position:absolute;left:25px;right:25px;bottom:24px;display:flex;flex-direction:column;gap:5px}.wall-hero-copy small{font-size:10px;letter-spacing:.16em;opacity:.8}.wall-hero-copy b{font-size:29px;line-height:1.15}.wall-hero-copy span{font-size:12px;opacity:.86}.wall-head{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:18px 2px 10px}.wall-head b{font-size:18px}.wall-head span{display:block;color:var(--fg3);font-size:11px;margin-top:2px}.wall-head-actions{display:flex;gap:5px}.wall-size{border:1px solid var(--line);background:var(--card);border-radius:999px;padding:7px 12px;font-size:11px;color:var(--fg2)}.wall-size.on{background:var(--fg);color:var(--bg);border-color:var(--fg)}.wall-cats{display:flex;gap:7px;overflow:auto;padding:2px 0 9px;scrollbar-width:none;overscroll-behavior-x:contain}.wall-cats::-webkit-scrollbar{display:none}.wall-cat{flex:0 0 auto;border:1px solid var(--line);background:var(--card);border-radius:999px;padding:8px 12px;font-size:11.5px;color:var(--fg2);transition:.18s}.wall-cat.on{background:var(--brand-grad);color:#fff;border-color:transparent;box-shadow:0 7px 18px rgba(91,108,255,.16)}.wall-search{display:flex;align-items:center;gap:8px;padding:0 13px;height:44px;border:1px solid var(--line);background:var(--card);border-radius:14px;margin:2px 0 15px}.wall-search span{font-size:18px;color:var(--fg3)}.wall-search input{border:0;outline:0;background:transparent;flex:1;font:inherit;font-size:12px;color:var(--fg)}.wall-masonry{columns:4 190px;column-gap:12px}.wall-card{width:100%;display:block;position:relative;padding:0;margin:0 0 12px;border:0;background:none;break-inside:avoid;border-radius:16px;overflow:hidden;cursor:pointer;box-shadow:0 6px 18px rgba(20,28,60,.08)}.wall-card img{width:100%;height:auto;display:block;transition:transform .35s cubic-bezier(.22,1,.36,1)}.wall-card-over{position:absolute;left:0;right:0;bottom:0;padding:30px 12px 11px;background:linear-gradient(transparent,rgba(0,0,0,.72));color:#fff;text-align:left;opacity:0;transition:.22s}.wall-card-over b{display:block;font-size:11px}.wall-card-over small{display:block;margin-top:3px;font-size:9px;opacity:.78}.wall-card:hover img{transform:scale(1.035)}.wall-card:hover .wall-card-over{opacity:1}.wall-more{display:flex;justify-content:center;margin:18px 0 5px}.wall-note{line-height:1.6}.wp-lightbox{position:fixed;inset:0;z-index:120;background:rgba(7,10,18,.94);display:none;align-items:center;justify-content:center;padding:24px}.wp-lightbox.on{display:flex;animation:lbPageIn .22s ease}.wp-lightbox img{max-width:min(94vw,1500px);max-height:86vh;object-fit:contain;border-radius:14px;box-shadow:0 20px 80px rgba(0,0,0,.45)}.wp-close{position:fixed;right:18px;top:calc(14px + env(safe-area-inset-top));z-index:2;width:42px;height:42px;border-radius:50%;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.1);color:#fff;font-size:27px}.wp-lb-actions{position:fixed;left:0;right:0;bottom:calc(16px + env(safe-area-inset-bottom));display:flex;justify-content:center}.party-shell{max-width:760px;margin:0 auto}.party-top{background:linear-gradient(145deg,#111629,#1a2140)!important;color:#fff;border-color:rgba(255,255,255,.08)!important;box-shadow:0 18px 50px rgba(20,25,60,.18)!important}.party-card{border-radius:22px!important}.party-stage{min-height:190px}.party-mode{padding:9px 13px!important}.party-mode.on{transform:none!important}.party-dices .die{width:58px!important;height:58px!important;border-radius:15px!important;font-size:29px!important;box-shadow:0 9px 22px rgba(0,0,0,.18)}.party-wheel{box-shadow:0 16px 45px rgba(91,108,255,.18)!important;border:6px solid rgba(255,255,255,.7)!important}.asset-hero{grid-template-columns:1.4fr repeat(4,1fr)!important}.asset-balance{min-height:102px;display:flex;flex-direction:column;justify-content:center}.asset-item{transition:transform .18s,box-shadow .18s!important}.asset-item:active{transform:scale(.985)}
-@media(max-width:820px){body{padding-bottom:112px}.tabbar{bottom:calc(-18px + env(safe-area-inset-bottom));transform:translateX(-50%) translateY(17px)}.tool-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}.tool-card{padding:13px 11px;min-height:118px}.tool-card .ic{width:32px;height:32px;font-size:17px}.tts-controls{grid-template-columns:1fr}.wall-hero{height:300px}.wall-masonry{columns:3 145px}}
+html{scroll-behavior:smooth;overscroll-behavior-y:none;scrollbar-gutter:stable;scroll-padding-top:128px}body{overscroll-behavior-y:none;scroll-padding-bottom:120px;padding-bottom:118px;-webkit-font-smoothing:antialiased}body.wp-lock{overflow:hidden;touch-action:none}body.scroll-lock{overflow:hidden;overscroll-behavior:none}.sheet{overscroll-behavior:contain}.page.active{animation:lbPageIn .32s cubic-bezier(.22,1,.36,1)}@keyframes lbPageIn{from{opacity:0;transform:translateY(12px) scale(.992)}to{opacity:1;transform:none}}button,.btn,.chip,.wall-cat,.wall-card,.tabbar button,.back,.sw-clear{touch-action:manipulation;-webkit-tap-highlight-color:transparent}.btn:active,.back:active,.tabbar button:active,.chip:active,.wall-cat:active,.wall-card:active,.tool-card:active{transform:scale(.965)!important;transition-duration:.06s}.tool-card{transition:transform .18s cubic-bezier(.22,1,.36,1),box-shadow .18s}.tabbar{bottom:calc(12px + env(safe-area-inset-bottom));transform:translateX(-50%);opacity:.985}.tabbar button{height:50px;min-width:54px}.home-cat-nav{position:sticky;top:0;z-index:35}.chip-bar{scroll-behavior:smooth;overscroll-behavior-x:contain}.tool-grid{grid-template-columns:repeat(auto-fill,minmax(188px,1fr));gap:12px}.tool-card{padding:15px 14px;border-radius:16px;min-height:126px}.tool-card .ic{width:34px;height:34px;font-size:18px;margin-bottom:9px}.tool-card h3{font-size:13px}.tool-card p{font-size:11px;line-height:1.45}.home-wrap,.page-inner{contain:layout paint}.tts-brand{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;margin-bottom:14px;border:1px solid var(--line);border-radius:15px;background:linear-gradient(135deg,var(--card2),var(--card))}.tts-brand b{display:block;font-size:15px}.tts-brand span{display:block;margin-top:3px;font-size:11px;color:var(--fg3)}.tts-controls{display:grid;grid-template-columns:1.4fr .8fr .8fr;gap:12px}.tts-actions{display:flex;gap:9px;margin-top:4px}.tts-actions .btn-main{flex:1.3}.tts-count{text-align:right;color:var(--fg3);font-size:10px;margin-top:4px}.ip-fast-links{display:flex;justify-content:flex-end;margin-top:10px}.wallpaper-app{max-width:1180px;margin:0 auto}.wall-hero{height:360px;border-radius:22px;overflow:hidden;position:relative;background:var(--card2);box-shadow:var(--shadow-sm)}.wall-hero-link{display:block;position:relative;height:100%;color:#fff;text-decoration:none}.wall-hero img{width:100%;height:100%;display:block;object-fit:cover}.wall-hero-grad{position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.05) 35%,rgba(0,0,0,.78) 100%)}.wall-hero-copy{position:absolute;left:25px;right:25px;bottom:24px;display:flex;flex-direction:column;gap:5px}.wall-hero-copy small{font-size:10px;letter-spacing:.16em;opacity:.8}.wall-hero-copy b{font-size:29px;line-height:1.15}.wall-hero-copy span{font-size:12px;opacity:.86}.wall-head{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:18px 2px 10px}.wall-head b{font-size:18px}.wall-head span{display:block;color:var(--fg3);font-size:11px;margin-top:2px}.wall-head-actions{display:flex;gap:5px}.wall-size{border:1px solid var(--line);background:var(--card);border-radius:999px;padding:7px 12px;font-size:11px;color:var(--fg2)}.wall-size.on{background:var(--fg);color:var(--bg);border-color:var(--fg)}.wall-cats{display:flex;gap:7px;overflow:auto;padding:2px 0 9px;scrollbar-width:none;overscroll-behavior-x:contain}.wall-cats::-webkit-scrollbar{display:none}.wall-cat{flex:0 0 auto;border:1px solid var(--line);background:var(--card);border-radius:999px;padding:8px 12px;font-size:11.5px;color:var(--fg2);transition:.18s}.wall-cat.on{background:var(--brand-grad);color:#fff;border-color:transparent;box-shadow:0 7px 18px rgba(91,108,255,.16)}.wall-search{display:flex;align-items:center;gap:8px;padding:0 13px;height:44px;border:1px solid var(--line);background:var(--card);border-radius:14px;margin:2px 0 15px}.wall-search span{font-size:18px;color:var(--fg3)}.wall-search input{border:0;outline:0;background:transparent;flex:1;font:inherit;font-size:12px;color:var(--fg)}.wall-masonry{columns:4 190px;column-gap:12px}.wall-card{width:100%;display:block;position:relative;padding:0;margin:0 0 12px;border:0;background:none;break-inside:avoid;border-radius:16px;overflow:hidden;cursor:pointer;box-shadow:0 6px 18px rgba(20,28,60,.08)}.wall-card img{width:100%;height:auto;display:block;transition:transform .35s cubic-bezier(.22,1,.36,1)}.wall-card-over{position:absolute;left:0;right:0;bottom:0;padding:30px 12px 11px;background:linear-gradient(transparent,rgba(0,0,0,.72));color:#fff;text-align:left;opacity:0;transition:.22s}.wall-card-over b{display:block;font-size:11px}.wall-card-over small{display:block;margin-top:3px;font-size:9px;opacity:.78}.wall-card:hover img{transform:scale(1.035)}.wall-card:hover .wall-card-over{opacity:1}.wall-more{display:flex;justify-content:center;margin:18px 0 5px}.wall-note{line-height:1.6}.wp-lightbox{position:fixed;inset:0;z-index:120;background:rgba(7,10,18,.94);display:none;align-items:center;justify-content:center;padding:24px}.wp-lightbox.on{display:flex;animation:lbPageIn .22s ease}.wp-lightbox img{max-width:min(94vw,1500px);max-height:86vh;object-fit:contain;border-radius:14px;box-shadow:0 20px 80px rgba(0,0,0,.45)}.wp-close{position:fixed;right:18px;top:calc(14px + env(safe-area-inset-top));z-index:2;width:42px;height:42px;border-radius:50%;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.1);color:#fff;font-size:27px}.wp-lb-actions{position:fixed;left:0;right:0;bottom:calc(16px + env(safe-area-inset-bottom));display:flex;justify-content:center}.party-shell{max-width:760px;margin:0 auto}.party-top{background:linear-gradient(145deg,#111629,#1a2140)!important;color:#fff;border-color:rgba(255,255,255,.08)!important;box-shadow:0 18px 50px rgba(20,25,60,.18)!important}.party-card{border-radius:22px!important}.party-stage{min-height:190px}.party-mode{padding:9px 13px!important}.party-mode.on{transform:none!important}.party-dices .die{width:58px!important;height:58px!important;border-radius:15px!important;font-size:29px!important;box-shadow:0 9px 22px rgba(0,0,0,.18)}.party-wheel{box-shadow:0 16px 45px rgba(91,108,255,.18)!important;border:6px solid rgba(255,255,255,.7)!important}.asset-hero{grid-template-columns:1.4fr repeat(4,1fr)!important}.asset-balance{min-height:102px;display:flex;flex-direction:column;justify-content:center}.asset-item{transition:transform .18s,box-shadow .18s!important}.asset-item:active{transform:scale(.985)}
+@media(max-width:820px){body{padding-bottom:112px}.tabbar{bottom:calc(10px + env(safe-area-inset-bottom));transform:translateX(-50%)}.tool-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}.tool-card{padding:13px 11px;min-height:118px}.tool-card .ic{width:32px;height:32px;font-size:17px}.tts-controls{grid-template-columns:1fr}.wall-hero{height:300px}.wall-masonry{columns:3 145px}}
 @media(max-width:560px){.tool-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.tool-card{min-height:114px;padding:12px 10px}.tool-card h3{font-size:12.5px}.tool-card p{font-size:10.5px}.tool-card .ic{width:30px;height:30px;font-size:16px;margin-bottom:7px}.wall-hero{height:250px;border-radius:18px}.wall-hero-copy{left:18px;bottom:18px}.wall-hero-copy b{font-size:23px}.wall-masonry{columns:2 135px;column-gap:8px}.wall-card{margin-bottom:8px;border-radius:13px}.tts-actions{flex-wrap:wrap}.tts-actions .btn{flex:1;min-width:108px}.asset-hero{grid-template-columns:repeat(2,1fr)!important}.asset-balance{grid-column:1/-1}.home-cat-nav{top:0}}
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}.page.active{animation:none}*,*::before,*::after{transition-duration:.01ms!important;animation-duration:.01ms!important}}
 
@@ -1252,7 +1276,7 @@ body{padding-bottom:102px!important}
 @media(max-width:1000px){.tool-grid,#recentSec .tool-grid{grid-template-columns:repeat(3,minmax(0,1fr))!important}}
 @media(max-width:640px){.tool-grid,#recentSec .tool-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:9px!important}.tool-card{min-height:102px!important;padding:10px!important}.tool-card .ic{font-size:24px!important}.tool-card h3{font-size:13px!important}.tool-card p{font-size:10.5px!important}.tabbar{bottom:calc(0px + env(safe-area-inset-bottom))!important}}
 /* weather */
-.weather-shell{display:grid;gap:14px}.weather-hero{border-radius:22px;padding:20px;background:linear-gradient(135deg,rgba(85,99,255,.16),rgba(97,194,255,.10),rgba(255,255,255,.04));border:1px solid var(--line);overflow:hidden}.weather-top{display:flex;justify-content:space-between;gap:12px}.weather-place{font-size:13px;color:var(--fg3)}.weather-temp{font-size:52px;line-height:.95;font-weight:850;letter-spacing:-2px;margin-top:15px}.weather-cond{font-weight:780;margin-top:8px}.weather-meta{font-size:12px;color:var(--fg3);margin-top:6px}.weather-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;margin-top:18px}.weather-stat{padding:11px;border-radius:14px;background:rgba(255,255,255,.55);border:1px solid rgba(255,255,255,.72)}.weather-stat span{display:block;font-size:11px;color:var(--fg3)}.weather-stat b{display:block;margin-top:4px;font-size:14px}.weather-days-pro{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}.weather-day-pro{padding:13px 9px;border:1px solid var(--line);background:var(--card);border-radius:15px;text-align:center;box-shadow:0 4px 15px rgba(15,23,42,.04)}.weather-day-pro.today{border-color:color-mix(in srgb,var(--brand1) 45%,var(--line))}.weather-day-pro .dow{font-size:11px;color:var(--fg3)}.weather-day-pro .emoji{font-size:25px;margin:10px 0 7px}.weather-day-pro .range{font-weight:760;font-size:12px}.weather-day-pro .rain{font-size:10px;color:var(--brand1);margin-top:4px}.weather-citybar{display:flex;gap:8px;overflow:auto;padding-bottom:4px;scrollbar-width:none}.weather-citybar::-webkit-scrollbar{display:none}.weather-citybar .chip{white-space:nowrap}@media(max-width:700px){.weather-stats{grid-template-columns:repeat(2,1fr)}.weather-days-pro{grid-template-columns:repeat(5,132px);overflow-x:auto}.weather-temp{font-size:46px}}
+.weather-shell{display:grid;gap:14px}.weather-hero{border-radius:22px;padding:20px;background:linear-gradient(135deg,rgba(85,99,255,.16),rgba(97,194,255,.10),rgba(255,255,255,.04));border:1px solid var(--line);overflow:hidden}.weather-top{display:flex;justify-content:space-between;gap:12px}.weather-place{font-size:13px;color:var(--fg3)}.weather-temp{font-size:52px;line-height:.95;font-weight:850;letter-spacing:-2px;margin-top:15px}.weather-cond{font-weight:780;margin-top:8px}.weather-meta{font-size:12px;color:var(--fg3);margin-top:6px}.weather-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;margin-top:18px}.weather-stat{padding:11px;border-radius:14px;background:var(--card2);border:1px solid var(--line)}.weather-stat span{display:block;font-size:11px;color:var(--fg3)}.weather-stat b{display:block;margin-top:4px;font-size:14px}.weather-days-pro{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}.weather-day-pro{padding:13px 9px;border:1px solid var(--line);background:var(--card);border-radius:15px;text-align:center;box-shadow:0 4px 15px rgba(15,23,42,.04)}.weather-day-pro.today{border-color:color-mix(in srgb,var(--brand1) 45%,var(--line))}.weather-day-pro .dow{font-size:11px;color:var(--fg3)}.weather-day-pro .emoji{font-size:25px;margin:10px 0 7px}.weather-day-pro .range{font-weight:760;font-size:12px}.weather-day-pro .rain{font-size:10px;color:var(--brand1);margin-top:4px}.weather-citybar{display:flex;gap:8px;overflow:auto;padding-bottom:4px;scrollbar-width:none}.weather-citybar::-webkit-scrollbar{display:none}.weather-citybar .chip{white-space:nowrap}@media(max-width:700px){.weather-stats{grid-template-columns:repeat(2,1fr)}.weather-days-pro{grid-template-columns:repeat(5,132px);overflow-x:auto}.weather-temp{font-size:46px}}
 /* docs & life */
 .doc-tabs{display:flex;gap:7px;overflow:auto;padding-bottom:4px}.doc-tabs .btn{white-space:nowrap}.doc-tabs .on{background:var(--brand1);color:#fff;border-color:transparent}.doc-panel{display:none}.doc-panel.on{display:block}.file-drop{border:1.5px dashed var(--line);border-radius:16px;padding:22px;text-align:center;background:var(--card2)}.doc-result{margin-top:12px;padding:12px;border-radius:14px;background:var(--card2);border:1px solid var(--line);white-space:pre-wrap;word-break:break-word;max-height:320px;overflow:auto}.life-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}.life-kpi{padding:13px;border:1px solid var(--line);border-radius:15px;background:var(--card2)}.life-kpi span{font-size:11px;color:var(--fg3)}.life-kpi b{display:block;font-size:20px;margin-top:5px}.record-list{display:grid;gap:8px;margin-top:12px}.record-row{display:flex;gap:10px;justify-content:space-between;align-items:center;padding:11px 12px;border:1px solid var(--line);border-radius:14px;background:var(--card)}.call-stage{border-radius:24px;min-height:520px;background:#0d1016;color:#fff;display:flex;align-items:center;justify-content:center}.call-inner{text-align:center;width:min(420px,90%)}.call-avatar{width:92px;height:92px;border-radius:50%;display:grid;place-items:center;margin:0 auto 16px;background:linear-gradient(135deg,#6675ff,#8b5cf6);font-size:36px;box-shadow:0 14px 40px rgba(99,102,241,.35)}.call-name{font-size:25px;font-weight:800}.call-num{color:rgba(255,255,255,.62);margin-top:6px}.call-buttons{display:flex;justify-content:center;gap:28px;margin-top:85px}.call-round{width:66px;height:66px;border:0;border-radius:50%;font-size:25px;color:#fff}.call-round.green{background:#23c16b}.call-round.red{background:#ef4f5f}@media(max-width:600px){.life-summary{grid-template-columns:1fr 1fr}.call-stage{min-height:500px}}
 
@@ -1265,6 +1289,68 @@ html{scroll-padding-bottom:112px!important}
 .weather-actions{display:flex;gap:8px;align-items:center}.weather-search{display:flex;align-items:center;gap:8px;flex:1;min-width:220px;padding-left:11px;border:1px solid var(--line);border-radius:14px;background:var(--card)}.weather-search>span{font-size:18px;color:var(--fg3)}.weather-search .inp{border:0;background:transparent;padding-left:0}.weather-locate{white-space:nowrap}.weather-helper{display:grid;gap:6px}.weather-helper>span{font-size:10px;color:var(--fg3);font-weight:700}.weather-citybar{padding-bottom:1px}.ip-fast-links{justify-content:flex-start}
 
 .ip-fast-links{align-items:center;gap:10px;flex-wrap:wrap} .ip-fast-links{align-items:center;gap:10px;flex-wrap:wrap}.ip-quick-result{min-height:86px}.weather-actions{position:sticky;top:0;z-index:2;background:var(--bg);padding:2px 0 5px}.weather-search{min-height:44px}.weather-locate{height:44px}.weather-citybar .chip{cursor:pointer}.doc-tabs{scrollbar-width:none}.doc-tabs::-webkit-scrollbar{display:none}.doc-result{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px}.stt-live-note{font-size:10px;color:var(--fg3);margin-top:8px}
+/* ===== 天气 移动端精修 v2.9.5 ===== */
+.weather-top{flex-wrap:wrap}
+@media(max-width:560px){
+  .weather-actions{flex-wrap:wrap;position:static;padding:2px 0 8px}
+  .weather-search{flex:1 1 100%;min-width:0;order:1}
+  .weather-locate{flex:1 1 100%;order:2;height:44px}
+  .weather-temp{font-size:42px;letter-spacing:-1px}
+  .weather-stats{grid-template-columns:repeat(2,1fr);gap:8px}
+  .weather-days-pro{grid-template-columns:repeat(5,108px);overflow-x:auto;padding-bottom:6px}
+  .weather-day-pro{padding:11px 6px}
+  .weather-day-pro .emoji{font-size:22px}
+  .weather-hero{padding:16px}
+  .weather-place{font-size:12px}
+}
+@media(max-width:380px){
+  .weather-days-pro{grid-template-columns:repeat(5,96px)}
+  .weather-temp{font-size:38px}
+}
+/* ================= 大话骰（聚会包）================= */
+.pg-liar-score{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}
+.pg-liar-score .pg-side{display:flex;flex-direction:column;align-items:center;gap:2px;font-size:12px;color:var(--fg2)}
+.pg-liar-score .pg-side b{font-size:24px;color:var(--brand1)}
+.pg-liar-score .pg-round{font-size:12px;color:var(--fg3)}
+.pg-liar-score .pg-round b{color:var(--fg);font-size:16px}
+.pg-liar-board{display:flex;flex-direction:column;gap:10px;width:100%}
+.pg-liar-row{display:flex;align-items:center;gap:10px}
+.pg-liar-row>b{font-size:12px;color:var(--fg2);width:46px;flex:none}
+.pg-liar-call{text-align:center;font-size:14px;font-weight:800;padding:6px 8px;border-radius:10px;background:var(--card2);color:var(--brand1)}
+.pg-liar-turn{text-align:center;font-size:13px;font-weight:700;margin:12px 0 8px}
+.pg-liar-bid{display:flex;flex-direction:column;gap:10px;background:var(--card2);border-radius:14px;padding:14px}
+.pg-bid-line{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:13px;color:var(--fg2)}
+.stepper{display:inline-flex;align-items:center;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--card)}
+.stepper button{width:32px;height:32px;border:0;background:transparent;color:var(--fg);font-size:18px;cursor:pointer}
+.stepper input{width:40px;border:0;background:transparent;color:var(--fg);text-align:center;font-weight:800;font-size:15px}
+.pg-faces{display:flex;gap:5px}
+.pg-faces button{width:34px;height:34px;border-radius:9px;border:1px solid var(--line);background:var(--card);color:var(--fg);font-weight:800;cursor:pointer}
+.pg-faces button.on{background:var(--brand1);color:#fff;border-color:transparent}
+.pg-liar-result{margin-top:12px;font-size:13.5px;font-weight:700;text-align:center;min-height:20px}
+.pg-liar-result.win{color:#16a34a}.pg-liar-result.lose{color:#ef4444}
+/* ================= 周期记录（月历热力图）================= */
+.pd-stats .res-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+.pd-stats .res-card{background:var(--card2);border:1px solid var(--line);border-radius:12px;padding:11px 12px}
+.pd-stats .res-card span{display:block;font-size:11.5px;color:var(--fg3);margin-bottom:3px}
+.pd-stats .res-card b{font-size:15px}
+.pd-cal{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:16px}
+.pd-month .pd-mh{font-size:12.5px;font-weight:800;text-align:center;margin-bottom:7px;color:var(--fg2)}
+.pd-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px}
+.pd-w{text-align:center;font-size:9.5px;color:var(--fg3);padding:2px 0}
+.pd-d{aspect-ratio:1;text-align:center;display:grid;place-items:center;font-size:10.5px;border-radius:7px;color:var(--fg2);background:var(--card2);border:1px solid transparent}
+.pd-d.empty{background:transparent;border:0}
+.pd-d.on{background:rgba(244,114,182,.18);color:#db2777;border-color:rgba(244,114,182,.5);font-weight:700}
+.pd-d.today{outline:2px solid var(--brand1);outline-offset:-2px}
+@media(max-width:560px){.pd-cal{grid-template-columns:1fr 1fr}}
+/* ================= 伙食记录 ================= */
+.ml-grp{background:var(--card2);border:1px solid var(--line);border-radius:13px;padding:11px 12px;margin-bottom:10px}
+.ml-grp-h{display:flex;justify-content:space-between;align-items:center;font-weight:800;font-size:13.5px;margin-bottom:6px}
+.ml-grp-h b{color:var(--brand1)}
+.ml-item{display:flex;justify-content:space-between;gap:10px;font-size:13px;padding:4px 0;border-top:1px dashed var(--line)}
+.ml-item:first-of-type{border-top:0}
+.ml-item i{color:var(--fg3);font-style:normal;font-size:11.5px;margin-left:4px}
+.ml-amt{color:var(--fg2);font-weight:700;white-space:nowrap}
+.ml-hist-h{font-size:12.5px;font-weight:800;color:var(--fg3);margin-bottom:8px}
 </style>
 </head>
 <body>
@@ -1715,6 +1801,12 @@ html{scroll-padding-bottom:112px!important}
 </div>
 <div class="rv-grid">
 <div class="panel rv-form" style="padding:20px">
+<div class="rv-tpls" id="rvTpls">
+<button data-t="classic" class="on">经典</button>
+<button data-t="modern">现代</button>
+<button data-t="left">左栏</button>
+<button data-t="compact">紧凑</button>
+</div>
 <div class="field"><label>姓名</label><input class="inp rv-in" data-k="name" maxlength="12" placeholder="你的名字"/></div>
 <div class="f2">
 <div class="field"><label>求职意向</label><input class="inp rv-in" data-k="intent" maxlength="20" placeholder="如：前端开发实习生"/></div>
@@ -1740,19 +1832,7 @@ html{scroll-padding-bottom:112px!important}
 <button class="btn btn-main" id="rvPrint" style="width:100%">🖨️ 打印 / 导出 PDF</button>
 </div>
 <div>
-<div class="rv-paper" id="rvPaper">
-<h1 class="rv-name">你的名字</h1>
-<div class="rv-intent">求职意向 · 待填写</div>
-<div class="rv-contact">电话 / 邮箱 / 城市</div>
-<h2>教育背景</h2>
-<div class="rv-edu"><span class="rv-empty">等待填写</span></div>
-<h2>技能特长</h2>
-<ul class="rv-skills"></ul>
-<h2>实践 / 项目经历</h2>
-<ul class="rv-exp"></ul>
-<h2>自我评价</h2>
-<p class="rv-summary"><span class="rv-empty">等待填写</span></p>
-</div>
+<div class="rv-paper" id="rvPaper"></div>
 </div>
 </div>
 </section>
@@ -3474,7 +3554,7 @@ console.log('代码块');
   <div class="party-top">
     <div class="party-brand"><div><h3>🎉 Party Box</h3><p>聚会一手机即可玩 · 纯本地 · 可随时跳过</p></div><div class="party-score">本局次数<b id="pgScore">0</b></div></div>
     <div class="party-modes" id="pgModes">
-      <button class="party-mode on" data-mode="dice">🎲 摇骰子</button><button class="party-mode" data-mode="compare">⚔️ 比大小</button><button class="party-mode" data-mode="bottle">🍾 转瓶子</button><button class="party-mode" data-mode="truth">🎭 真心话</button><button class="party-mode" data-mode="dare">⚡ 大冒险</button><button class="party-mode" data-mode="punish">🍻 随机挑战</button>
+      <button class="party-mode on" data-mode="dice">🎲 摇骰子</button><button class="party-mode" data-mode="compare">⚔️ 比大小</button><button class="party-mode" data-mode="bottle">🍾 转瓶子</button><button class="party-mode" data-mode="liar">🎯 大话骰</button><button class="party-mode" data-mode="truth">🎭 真心话</button><button class="party-mode" data-mode="dare">⚡ 大冒险</button><button class="party-mode" data-mode="punish">🍻 随机挑战</button>
     </div>
   </div>
   <div class="party-card" id="pgDice">
@@ -3504,6 +3584,40 @@ console.log('代码块');
     <div class="party-qa" id="pgPunishText"><div><small>CHALLENGE</small>轻松玩，任何不舒服的挑战都可以跳过。</div></div>
     <div class="party-btnrow"><button class="btn btn-main" id="pgPunishGo">🍻 抽一个</button></div>
   </div>
+  <div class="party-card" id="pgLiar" hidden>
+    <div class="pg-liar-score">
+      <div class="pg-side"><span>玩家 A</span><b id="pgLiarA">0</b></div>
+      <div class="pg-round">第 <b id="pgLiarRound">1</b> 局</div>
+      <div class="pg-side"><span>玩家 B</span><b id="pgLiarB">0</b></div>
+    </div>
+    <div class="party-stage">
+      <div class="pg-liar-board">
+        <div class="pg-liar-row"><b>玩家 A</b><div class="party-dices" id="pgLiarDA"></div></div>
+        <div class="pg-liar-call" id="pgLiarCall">尚无叫点</div>
+        <div class="pg-liar-row"><b>玩家 B</b><div class="party-dices" id="pgLiarDB"></div></div>
+      </div>
+    </div>
+    <div class="pg-liar-turn" id="pgLiarTurn">轮到 玩家 A 叫点</div>
+    <div class="pg-liar-bid">
+      <div class="pg-bid-line">数量
+        <div class="stepper"><button id="pgLiarQm" type="button">−</button><input id="pgLiarQ" value="1" type="text" readonly/><button id="pgLiarQp" type="button">＋</button></div>
+        个 · 面
+        <div class="pg-faces" id="pgLiarFaces">
+          <button data-f="1" class="on" type="button">1</button><button data-f="2" type="button">2</button><button data-f="3" type="button">3</button><button data-f="4" type="button">4</button><button data-f="5" type="button">5</button><button data-f="6" type="button">6</button>
+        </div>
+      </div>
+    </div>
+    <div class="party-btnrow">
+      <button class="btn btn-main" id="pgLiarBid">叫点 / 加注</button>
+      <button class="btn" id="pgLiarOpen">🃏 开！挑战</button>
+    </div>
+    <div class="pg-liar-result" id="pgLiarResult"></div>
+    <div class="party-btnrow" style="margin-top:8px">
+      <button class="btn" id="pgLiarNew">🔄 新一局</button>
+      <button class="btn btn-ghost" id="pgLiarReset">🧹 清零比分</button>
+    </div>
+    <div class="dz-sub" style="margin-top:10px">规则：每人 3 颗骰，共 6 颗。先叫“≥N 个 X 点”，对手可加注（更多数量，或同数量更大点数）或“开”。开后统计真实 X 的数量：达到叫点则开的人输，否则叫的人输。</div>
+  </div>
   <div class="party-card" style="padding:13px 15px;background:var(--card2)"><span style="font-size:11px;color:var(--fg3)">💡 玩法提示</span><p class="dz-sub" style="margin-top:4px">游戏默认加入“可以跳过”的轻量挑战，不强制饮酒；你们可以按自己的聚会规则改题。</p></div>
 </div>
 </section>
@@ -3522,9 +3636,9 @@ console.log('代码块');
 <section class="page" id="page-docbox"><div class="tool-head"><button aria-label="返回" class="back" data-go="home">←</button><div><h2>文档转换箱</h2><p>EPUB / PDF / DOCX ↔ TXT，Markdown / HTML / CSV 文件互转</p></div></div><div class="panel" style="padding:18px"><div class="doc-tabs" id="docTabs"><button class="btn on" data-doc="epub">EPUB → TXT</button><button class="btn" data-doc="pdf">PDF → TXT</button><button class="btn" data-doc="docx">DOCX → TXT</button><button class="btn" data-doc="html">HTML → TXT</button><button class="btn" data-doc="md">MD → HTML</button><button class="btn" data-doc="txt2epub">TXT → EPUB</button><button class="btn" data-doc="csv">CSV ↔ JSON</button></div><div class="doc-panel on" data-doc-panel="epub"><div class="file-drop"><b>📚 选择 EPUB</b><div class="dz-sub">按阅读顺序提取章节正文，不上传文件</div><input hidden id="epubFile" type="file" accept=".epub,application/epub+zip"><button class="btn btn-main" id="epubPick" style="margin-top:12px">选择文件</button></div><div id="epubStat" class="empty-tip">等待文件</div></div><div class="doc-panel" data-doc-panel="pdf"><div class="file-drop"><b>📕 选择 PDF</b><input hidden id="pdfTextFile" type="file" accept="application/pdf"><button class="btn btn-main" id="pdfTextPick" style="margin-top:12px">选择文件</button></div><div id="pdfTextStat" class="empty-tip">等待文件</div></div><div class="doc-panel" data-doc-panel="docx"><div class="file-drop"><b>📄 选择 DOCX</b><input hidden id="docxFile" type="file" accept=".docx"><button class="btn btn-main" id="docxPick" style="margin-top:12px">选择文件</button></div><div id="docxStat" class="empty-tip">等待文件</div></div><div class="doc-panel" data-doc-panel="html"><textarea class="inp" id="htmlIn" rows="12" placeholder="粘贴 HTML / 网页源码……"></textarea><button class="btn btn-main" id="htmlToTxt" style="margin-top:10px">提取 TXT</button></div><div class="doc-panel" data-doc-panel="md"><textarea class="inp" id="docMdIn" rows="12" placeholder="# 标题\n\n- 列表\n\n正文……"></textarea><button class="btn btn-main" id="mdToHtml" style="margin-top:10px">转换 HTML</button></div><div class="doc-panel" data-doc-panel="txt2epub"><div class="file-drop"><b>📚 TXT → EPUB</b><div class="dz-sub">纯文本直接打包为标准 EPUB 电子书，可在阅读器打开</div><input hidden id="txt2epubFile" type="file" accept=".txt,text/plain"><button class="btn btn-main" id="txt2epubPick" style="margin-top:12px">选择 TXT</button></div><div class="field" style="margin-top:12px"><label>书名</label><input class="inp" id="txt2epubName" placeholder="可留空，默认使用文件名"></div><div id="txt2epubStat" class="empty-tip">等待文件</div></div><div class="doc-panel" data-doc-panel="csv"><textarea class="inp" id="csvJsonIn" rows="12" placeholder="CSV：姓名,金额\n张三,20\n李四,35\n\n或 JSON 数组"></textarea><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px"><button class="btn btn-main" id="csvToJson">CSV → JSON</button><button class="btn" id="jsonToCsv">JSON → CSV</button></div></div><div class="doc-result" id="docResult" hidden></div><div style="display:flex;gap:8px;margin-top:10px" id="docResultActions" hidden><button class="btn" id="docCopy">复制</button><button class="btn btn-main" id="docDownload">下载结果</button></div></div></section>
 <section class="page" id="page-fileinfo"><div class="tool-head"><button aria-label="返回" class="back" data-go="home">←</button><div><h2>文件信息</h2><p>查看大小、类型、修改时间与图片尺寸</p></div></div><div class="panel" style="padding:18px"><div class="file-drop"><div style="font-size:30px">🗂️</div><input hidden id="fiFile" type="file"><button class="btn btn-main" id="fiPick">选择文件</button></div><div id="fiOut" style="margin-top:12px"></div></div></section>
 <section class="page" id="page-ledger"><div class="tool-head"><button aria-label="返回" class="back" data-go="home">←</button><div><h2>记账本</h2><p>收入 / 支出 / 分类 / 月度统计，本机保存</p></div></div><div class="panel" style="padding:18px"><div class="life-summary"><div class="life-kpi"><span>本月支出</span><b id="lgExpense">¥0</b></div><div class="life-kpi"><span>本月收入</span><b id="lgIncome">¥0</b></div><div class="life-kpi"><span>记录笔数</span><b id="lgCount">0</b></div></div><div class="field"><label>金额</label><input class="inp" id="lgAmt" type="number" min="0" step="0.01"></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:9px"><div class="field"><label>类型</label><select class="inp" id="lgType"><option value="expense">支出</option><option value="income">收入</option></select></div><div class="field"><label>分类</label><select class="inp" id="lgCat"><option>餐饮</option><option>交通</option><option>购物</option><option>娱乐</option><option>学习</option><option>住房</option><option>工资</option><option>其他</option></select></div></div><div class="field"><label>备注</label><input class="inp" id="lgNote" placeholder="晚饭 / 地铁 / 买书"></div><div class="field"><label>日期</label><input class="inp" id="lgDate" type="date"></div><button class="btn btn-main" id="lgAdd" style="width:100%">＋ 记一笔</button><div class="record-list" id="lgList"></div></div></section>
-<section class="page" id="page-meallog"><div class="tool-head"><button aria-label="返回" class="back" data-go="home">←</button><div><h2>伙食记录</h2><p>记录今天吃了什么和花费</p></div></div><div class="panel" style="padding:18px"><div class="life-summary"><div class="life-kpi"><span>今日伙食</span><b id="mlToday">¥0</b></div><div class="life-kpi"><span>本月伙食</span><b id="mlMonth">¥0</b></div><div class="life-kpi"><span>本月记录</span><b id="mlCount">0</b></div></div><div style="display:grid;grid-template-columns:1fr 1.5fr;gap:9px"><div class="field"><label>餐次</label><select class="inp" id="mlMeal"><option>早餐</option><option selected>午餐</option><option>晚餐</option><option>零食</option><option>饮料</option></select></div><div class="field"><label>花费</label><input class="inp" id="mlAmt" type="number" min="0" step="0.01"></div></div><div class="field"><label>吃了什么</label><input class="inp" id="mlFood"></div><div class="field"><label>备注</label><input class="inp" id="mlNote"></div><button class="btn btn-main" id="mlAdd" style="width:100%">🍜 记录这顿</button><div class="record-list" id="mlList"></div></div></section>
-<section class="page" id="page-callmock"><div class="tool-head"><button aria-label="返回" class="back" data-go="home">←</button><div><h2>来电模拟</h2><p>联系人 / 号码 / 铃声可自定义</p></div></div><div class="panel" style="padding:18px"><div style="display:grid;grid-template-columns:1fr 1fr;gap:9px"><div class="field"><label>联系人</label><input class="inp" id="cmName" value="妈妈"></div><div class="field"><label>号码</label><input class="inp" id="cmNum" value="138 **** 8888"></div></div><div class="field"><label>来电提示</label><select class="inp" id="cmSound"><option value="ring">经典</option><option value="pulse">短促</option><option value="silent">静音</option></select></div><button class="btn btn-main" id="cmStart" style="width:100%">📞 模拟来电</button><div class="call-stage" id="cmStage" style="display:none;margin-top:14px"><div class="call-inner"><div class="call-avatar" id="cmAvatar">妈</div><div class="call-name" id="cmScreenName">妈妈</div><div class="call-num" id="cmScreenNum">138 **** 8888</div><div class="call-num" id="cmStatus">正在呼叫…</div><div class="call-buttons"><button class="call-round red" id="cmHang">✕</button><button class="call-round green" id="cmAccept">☎</button></div></div></div></div></section>
-<section class="page" id="page-period"><div class="tool-head"><button aria-label="返回" class="back" data-go="home">←</button><div><h2>周期记录</h2><p>记录周期与日期估算，本机保存</p></div></div><div class="panel" style="padding:18px"><div class="field"><label>最近一次开始日期</label><input class="inp" id="pdStart" type="date"></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:9px"><div class="field"><label>周期长度</label><input class="inp" id="pdCycle" type="number" min="15" max="60" value="28"></div><div class="field"><label>经期长度</label><input class="inp" id="pdDays" type="number" min="1" max="14" value="5"></div></div><div class="field"><label>备注</label><input class="inp" id="pdNote"></div><button class="btn btn-main" id="pdSave" style="width:100%">保存记录</button><div id="pdOut" style="margin-top:14px"></div><div class="dz-sub" style="margin-top:10px">仅作个人记录与日期估算，不作为医疗建议。</div></div></section>
+<section class="page" id="page-meallog"><div class="tool-head"><button aria-label="返回" class="back" data-go="home">←</button><div><h2>伙食记录</h2><p>早午晚零食随手记 · 今日分组 · 月度合计</p></div></div><div class="panel" style="padding:18px"><div class="life-summary"><div class="life-kpi"><span>今日合计</span><b id="mlToday">¥0</b></div><div class="life-kpi"><span>本月合计</span><b id="mlMonth">¥0</b></div><div class="life-kpi"><span>本月记录</span><b id="mlCount">0</b></div></div><div class="field"><label>餐型</label><div class="seg" id="mlMealChips"><button class="on" data-meal="早餐" type="button">🌅 早餐</button><button data-meal="午餐" type="button">☀️ 午餐</button><button data-meal="晚餐" type="button">🌙 晚餐</button><button data-meal="零食" type="button">🍪 零食</button><button data-meal="饮料" type="button">🥤 饮料</button></div><input type="hidden" id="mlMeal" value="早餐"/></div><div class="field"><label>吃了什么</label><input class="inp" id="mlFood"></div><div class="field"><label>金额（可选）</label><input class="inp" id="mlAmt" type="number" min="0" step="0.01" placeholder="¥"></div><div class="field"><label>备注（可选）</label><input class="inp" id="mlNote"></div><button class="btn btn-main" id="mlAdd" style="width:100%">🍜 记一笔</button><div class="ml-groups" id="mlGroups" style="margin-top:16px"></div><div class="ml-hist" style="margin-top:16px"><div class="ml-hist-h">最近记录</div><div class="record-list" id="mlList"></div></div></div></section>
+<section class="page" id="page-callmock"><div class="tool-head"><button aria-label="返回" class="back" data-go="home">←</button><div><h2>来电模拟</h2><p>联系人 / 号码 / 铃声可自定义</p></div></div><div class="panel" style="padding:18px"><div style="display:grid;grid-template-columns:1fr 1fr;gap:9px"><div class="field"><label>联系人</label><input class="inp" id="cmName" value="妈妈"></div><div class="field"><label>号码</label><input class="inp" id="cmNum" value="138 **** 8888"></div></div><div class="field"><label>来电提示</label><select class="inp" id="cmSound"><option value="ring">经典</option><option value="pulse">短促</option><option value="silent">静音</option></select></div><button class="btn btn-main" id="cmStart" style="width:100%">📞 模拟来电</button><div class="call-stage" id="cmStage" style="display:none;position:fixed;inset:0;z-index:200;background:linear-gradient(160deg,#1c2333,#0b0e16);color:#fff;flex-direction:column;align-items:center;justify-content:center;padding:32px;text-align:center"><div id="cmAvatar" style="width:104px;height:104px;border-radius:50%;background:linear-gradient(135deg,#5b6cff,#9b5cff);display:grid;place-items:center;font-size:42px;font-weight:800;margin-bottom:18px">妈</div><div id="cmScreenName" style="font-size:24px;font-weight:800">妈妈</div><div id="cmScreenNum" style="opacity:.7;margin-top:6px;font-size:15px">138 **** 8888</div><div id="cmStatus" style="margin-top:22px;opacity:.85;font-size:15px">正在呼叫…</div><div style="display:flex;gap:46px;margin-top:48px"><button id="cmHang" style="width:72px;height:72px;border-radius:50%;border:none;background:#ff4d4f;color:#fff;font-size:30px;cursor:pointer">✕</button><button id="cmAccept" style="width:72px;height:72px;border-radius:50%;border:none;background:#34c759;color:#fff;font-size:30px;cursor:pointer">☎</button></div></div></div></section>
+<section class="page" id="page-period"><div class="tool-head"><button aria-label="返回" class="back" data-go="home">←</button><div><h2>周期记录</h2><p>经期追踪 · 月历预测 · 本机保存</p></div></div><div class="panel" style="padding:18px"><div class="field"><label>最近一次开始日期</label><input class="inp" id="pdStart" type="date"></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:9px"><div class="field"><label>周期长度（天）</label><input class="inp" id="pdCycle" type="number" min="15" max="60" value="28"></div><div class="field"><label>经期长度（天）</label><input class="inp" id="pdDays" type="number" min="1" max="14" value="5"></div></div><div class="field"><label>备注（可选）</label><input class="inp" id="pdNote"></div><button class="btn btn-main" id="pdSave" style="width:100%">保存记录</button><div class="pd-stats" id="pdStats" style="margin-top:14px"></div><div class="pd-cal" id="pdCal"></div><div class="dz-sub" style="margin-top:10px">仅作个人记录与日期估算，不作为医疗建议。</div></div></section>
 <section class="page" id="page-water"><div class="tool-head"><button aria-label="返回" class="back" data-go="home">←</button><div><h2>喝水记录</h2><p>今日饮水轻量记录</p></div></div><div class="panel" style="padding:18px"><div class="life-summary"><div class="life-kpi"><span>今日杯数</span><b id="wtCount">0</b></div><div class="life-kpi"><span>今日毫升</span><b id="wtMl">0 ml</b></div><div class="life-kpi"><span>目标</span><b id="wtGoal">2000 ml</b></div></div><div class="field"><label>每杯</label><select class="inp" id="wtCup"><option value="150">150 ml</option><option value="200" selected>200 ml</option><option value="250">250 ml</option><option value="300">300 ml</option><option value="500">500 ml</option></select></div><button class="btn btn-main" id="wtAdd" style="width:100%">💧 喝一杯</button><button class="btn" id="wtReset" style="width:100%;margin-top:8px">今天重置</button><div id="wtLog" class="doc-result" style="min-height:80px"></div></div></section>
 <section class="page" id="page-filemerge"><div class="tool-head"><button aria-label="返回" class="back" data-go="home">←</button><div><h2>文本文件合并</h2><p>批量合并 TXT / MD / CSV</p></div></div><div class="panel" style="padding:18px"><input id="fmFiles" type="file" multiple accept=".txt,.md,.csv"><button class="btn btn-main" id="fmGo" style="width:100%;margin-top:12px">🧩 合并并下载</button><div id="fmStat" class="empty-tip">等待选择文件</div></div></section>
 <section class="page" id="page-textscan"><div class="tool-head"><button aria-label="返回" class="back" data-go="home">←</button><div><h2>文本提取器</h2><p>从长文本快速提取常用信息</p></div></div><div class="panel" style="padding:18px"><textarea class="inp" id="sxIn" rows="12" placeholder="粘贴文本，例如文章、日志、聊天记录……"></textarea><div style="display:grid;grid-template-columns:repeat(5,1fr);gap:7px;margin-top:10px"><button class="btn sx-type" data-sx="url">网址</button><button class="btn sx-type" data-sx="email">邮箱</button><button class="btn sx-type" data-sx="ip">IPv4</button><button class="btn sx-type" data-sx="phone">手机号</button><button class="btn sx-type on" data-sx="num">数字</button></div><textarea class="inp" id="sxOut" rows="8" readonly style="margin-top:10px"></textarea><div style="display:flex;gap:8px;margin-top:10px"><button class="btn btn-main" id="sxGo">提取</button><button class="btn" id="sxCopy">复制结果</button></div></div></section>
@@ -6148,18 +6262,7 @@ function homeFilter(q) {
 }
 let homeScrollRAF = 0;
 function homeSyncByScroll() {
-  if (homeView === 'fav' || ($('#homeSearch') && $('#homeSearch').value.trim())) return;
-  if (homeScrollRAF) return;
-  homeScrollRAF = requestAnimationFrame(() => {
-    homeScrollRAF = 0;
-    const probe = window.scrollY + 156;
-    let current = '';
-    $$('#catWrap .cat-sec:not([hidden])').forEach(sec => {
-      if (sec.getBoundingClientRect().top + window.scrollY <= probe) current = sec.dataset.cat;
-    });
-    if (!current && window.scrollY < 320) current = '';
-    if (current) homeSetChip(current); else homeSetChip('');
-  });
+  /* v2.9.5: 关闭滚动自动高亮——分类仅在点击时高亮，下滑不再跳动 */
 }
 function renderChips() {
   const fn = favGet().length;
@@ -7347,67 +7450,89 @@ txRender();
 /* ================================================================
  * 模块九：简历生成器
  * ================================================================ */
-const RV_KEYS = ['name', 'intent', 'city', 'phone', 'email', 'school', 'major', 'degree', 'eduTime', 'skills', 'exp', 'summary'];
+const RV_KEYS = ['name', 'intent', 'city', 'phone', 'email', 'school', 'major', 'degree', 'eduTime', 'skills', 'exp', 'summary', 'tmpl'];
 let RV = {};
 try { RV = JSON.parse(LB_STORAGE.getItem('litebox_resume') || '{}'); } catch (e) { RV = {}; }
+if (!RV.tmpl) RV.tmpl = 'classic';
+function rvSave() { try { LB_STORAGE.setItem('litebox_resume', JSON.stringify(RV)); } catch (e) {} }
 function rvLoadInputs() {
   $$('.rv-in').forEach(el => {
     const k = el.dataset.k;
     if (RV[k] !== undefined && RV[k] !== '') el.value = RV[k];
   });
+  $$('#rvTpls button').forEach(b => b.classList.toggle('on', b.dataset.t === RV.tmpl));
 }
-function rvFillList(sel, text) {
-  const ul = $(sel);
-  ul.innerHTML = '';
-  const items = (text || '').split('\n').map(s => s.trim()).filter(Boolean);
-  if (!items.length) {
-    const li = document.createElement('li');
-    li.innerHTML = '<span class="rv-empty">等待填写</span>';
-    ul.appendChild(li);
-    return;
-  }
-  items.forEach(t => {
-    const li = document.createElement('li');
-    li.textContent = t;
-    ul.appendChild(li);
-  });
+function rvData() {
+  const g = k => (RV[k] || '').trim();
+  const contacts = [];
+  if (g('phone')) contacts.push('📞 ' + g('phone'));
+  if (g('email')) contacts.push('✉️ ' + g('email'));
+  if (g('city')) contacts.push('📍 ' + g('city'));
+  return {
+    name: g('name'), intent: g('intent'), contacts,
+    school: g('school'), major: g('major'), degree: g('degree'), eduTime: g('eduTime'),
+    skills: g('skills').split('\n').map(s => s.trim()).filter(Boolean),
+    exp: g('exp').split('\n').map(s => s.trim()).filter(Boolean),
+    summary: g('summary')
+  };
+}
+function rvList(title, items) {
+  if (!items.length) return '<h2>' + esc(title) + '</h2><p class="rv-empty">等待填写</p>';
+  return '<h2>' + esc(title) + '</h2><ul>' + items.map(t => '<li>' + esc(t) + '</li>').join('') + '</ul>';
+}
+function rvEdu(D) {
+  if (!D.school && !D.major && !D.degree && !D.eduTime) return '<h2>教育背景</h2><p class="rv-empty">等待填写</p>';
+  let h = '<h2>教育背景</h2><div class="rv-edu"><b>' + esc(D.school || '学校') +
+    (D.major ? ' · ' + esc(D.major) : '') + (D.degree ? ' · ' + esc(D.degree) : '') + '</b>';
+  if (D.eduTime) h += '<div class="rv-line2">' + esc(D.eduTime) + '</div>';
+  return h + '</div>';
+}
+function tplClassic(D) {
+  const top = '<div class="rv-top"><h1 class="rv-name">' + esc(D.name || '你的名字') + '</h1>' +
+    '<div class="rv-intent">' + (D.intent ? '求职意向 · ' + esc(D.intent) : '求职意向 · 待填写') + '</div>' +
+    (D.contacts.length ? '<div class="rv-contact">' + D.contacts.map(c => '<span>' + esc(c) + '</span>').join('') + '</div>' : '<div class="rv-contact">电话 / 邮箱 / 城市</div>') +
+    '</div>';
+  const body = rvEdu(D) + rvList('技能特长', D.skills) + rvList('实践 / 项目经历', D.exp) +
+    (D.summary ? '<h2>自我评价</h2><p class="rv-summary">' + esc(D.summary) + '</p>' : '<h2>自我评价</h2><p class="rv-empty">等待填写</p>');
+  return top + body;
+}
+function tplLeft(D) {
+  const top = '<div class="rv-top"><h1 class="rv-name">' + esc(D.name || '你的名字') + '</h1>' +
+    (D.intent ? '<div class="rv-intent">求职意向 · ' + esc(D.intent) + '</div>' : '') + '</div>';
+  const side = '<aside class="rv-side"><h2>联系方式</h2><div class="rv-contact">' +
+    (D.contacts.length ? D.contacts.map(c => '<span>' + esc(c) + '</span>').join('') : '待填写') + '</div>' +
+    rvList('技能特长', D.skills) + '</aside>';
+  const main = '<div class="rv-main">' + rvEdu(D) + rvList('实践 / 项目经历', D.exp) +
+    (D.summary ? '<h2>自我评价</h2><p class="rv-summary">' + esc(D.summary) + '</p>' : '') + '</div>';
+  return top + '<div class="rv-cols">' + side + main + '</div>';
+}
+function tplCompact(D) {
+  const top = '<div class="rv-top"><h1 class="rv-name">' + esc(D.name || '你的名字') + '</h1>' +
+    (D.intent ? '<div class="rv-intent">' + esc(D.intent) + '</div>' : '') +
+    (D.contacts.length ? '<div class="rv-contact">' + D.contacts.map(c => '<span>' + esc(c) + '</span>').join('') + '</div>' : '') + '</div>';
+  const body = rvEdu(D) + rvList('技能特长', D.skills) + rvList('实践 / 项目经历', D.exp) +
+    (D.summary ? '<h2>自我评价</h2><p class="rv-summary">' + esc(D.summary) + '</p>' : '');
+  return top + body;
 }
 function rvRender() {
-  const g = k => (RV[k] || '').trim();
-  $('#rvPaper .rv-name').textContent = g('name') || '你的名字';
-  $('#rvPaper .rv-intent').textContent = g('intent') ? '求职意向 · ' + g('intent') : '求职意向 · 待填写';
-  const contacts = [
-    g('phone') ? '📞 ' + g('phone') : '',
-    g('email') ? '✉️ ' + g('email') : '',
-    g('city') ? '📍 ' + g('city') : ''
-  ].filter(Boolean);
-  $('#rvPaper .rv-contact').textContent = contacts.join('　|　') || '电话 / 邮箱 / 城市';
-  const eduEl = $('#rvPaper .rv-edu');
-  eduEl.innerHTML = '';
-  if (g('school')) {
-    const b = document.createElement('b');
-    b.textContent = g('school') + (g('major') ? ' · ' + g('major') : '') + (g('degree') ? ' · ' + g('degree') : '');
-    eduEl.appendChild(b);
-    if (g('eduTime')) {
-      const l2 = document.createElement('div');
-      l2.className = 'rv-line2';
-      l2.textContent = g('eduTime');
-      eduEl.appendChild(l2);
-    }
-  } else {
-    eduEl.innerHTML = '<span class="rv-empty">等待填写</span>';
-  }
-  rvFillList('.rv-skills', g('skills'));
-  rvFillList('.rv-exp', g('exp'));
-  const sm = $('#rvPaper .rv-summary');
-  if (g('summary')) sm.textContent = g('summary');
-  else sm.innerHTML = '<span class="rv-empty">等待填写</span>';
+  const D = rvData();
+  const tpl = RV.tmpl || 'classic';
+  const fn = { classic: tplClassic, modern: tplClassic, left: tplLeft, compact: tplCompact }[tpl] || tplClassic;
+  const paper = $('#rvPaper');
+  paper.className = 'rv-paper rv-tpl-' + tpl;
+  paper.innerHTML = fn(D);
 }
+$$('#rvTpls button').forEach(b => {
+  b.addEventListener('click', () => {
+    $$('#rvTpls button').forEach(x => x.classList.remove('on'));
+    b.classList.add('on');
+    RV.tmpl = b.dataset.t; rvSave(); rvRender();
+  });
+});
 $$('.rv-in').forEach(el => {
   const handler = debounce(() => {
     $$('.rv-in').forEach(x => { RV[x.dataset.k] = x.value; });
-    LB_STORAGE.setItem('litebox_resume', JSON.stringify(RV));
-    rvRender();
+    rvSave(); rvRender();
   }, 300);
   el.addEventListener('input', handler);
   el.addEventListener('change', handler);
@@ -10975,7 +11100,7 @@ function miDevRender() {
 }
 
 /* ---- 壁纸中心 v2.8.0：多源 + 分类 + 防重复 + 站点式图库 ---- */
-const WP_TABS=[['featured','✨ 精选'],['beauty','💎 美女'],['social','📱 朋友圈背景'],['anime','🎨 动漫'],['girl','🌸 二次元'],['chinese','🏮 国风'],['minimal','◻️ 简约'],['healing','🌿 治愈'],['nature','🏔️ 自然'],['city','🏙️ 城市'],['animal','🐾 动物'],['tech','💻 科技'],['car','🏎️ 汽车'],['game','🎮 游戏'],['space','🌌 星空'],['mobile','📲 手机']];
+const WP_TABS=[['featured','✨ 精选'],['beauty','💎 美女'],['social','📱 朋友圈背景'],['anime','🎨 动漫'],['girl','🌸 二次元'],['chinese','🏮 国风'],['minimal','◻️ 简约'],['healing','🌿 治愈'],['nature','🏔️ 自然'],['city','🏙️ 城市'],['animal','🐾 动物'],['tech','💻 科技'],['car','🏎️ 汽车'],['game','🎮 游戏'],['space','🌌 星空'],['mobile','📲 手机'],['abstract','🔷 抽象'],['food','🍱 美食'],['travel','✈️ 旅行'],['flower','🌷 花卉'],['sport','⚽ 运动'],['movie','🎬 影视'],['ocean','🌊 海洋'],['forest','🌲 森林']];
 const WP_SET={
  featured:['photo-1500530855697-b586d89ba3ee','photo-1493246507139-91e8fad9978e','photo-1470770841072-f978cf4d019e','photo-1519608487953-e999c86e7455','photo-1441974231531-c6227db76b6e','photo-1469474968028-56623f02e42e','photo-1470252649378-9c29740c9fa8','photo-1501785888041-af3ef285b470'],
  beauty:['photo-1488426862026-3ee34a7d66df','photo-1496747611176-843222e1e57c','photo-1515886657613-9f3515b0c78f','photo-1524504388940-b1c1722653e1','photo-1544005313-94ddf0286df2','photo-1529626455594-4ff0802cfb7e','photo-1529139574466-a303027c1d8b','photo-1517841905240-472988babdf9'],
@@ -10992,7 +11117,15 @@ const WP_SET={
  car:['photo-1503376780353-7e6692767b70','photo-1492144534655-ae79c964c9d7','photo-1542362567-b07e54358753','photo-1504215680853-026ed2a45def','photo-1511919884226-fd3cad34687c','photo-1514316454349-750f7fd7da0a'],
  game:['photo-1511512578047-dfb367046420','photo-1542751371-adc38448a05e','photo-1538481199705-c710c4e047b3','photo-1605901309584-818e25960a8f','photo-1493711662062-fa541adb3fc8','photo-1593305841991-05c297ba4575'],
  space:['photo-1446776811953-b23d57bd21aa','photo-1462331940025-496dfbfc7564','photo-1444703686981-a3abbc4d4fe3','photo-1473929734673-23c7d16d4d2c','photo-1484589065579-248aad0d8b13','photo-1502134249126-9f3755a50d78'],
- mobile:['photo-1519681393784-d120267933ba','photo-1499080863209-68cf7b4b0d8a','photo-1519608487953-e999c86e7455','photo-1451187580459-43490279c0fa','photo-1518837695005-2083093ee35b','photo-1495567720989-cebdbdd97913']
+ mobile:['photo-1519681393784-d120267933ba','photo-1499080863209-68cf7b4b0d8a','photo-1519608487953-e999c86e7455','photo-1451187580459-43490279c0fa','photo-1518837695005-2083093ee35b','photo-1495567720989-cebdbdd97913'],
+ abstract:['photo-1502691876148-a84978e59af8','photo-1550859492-d5da9d8e45f3','photo-1541701491873-b40c4a7d4c2e','photo-1557672172-298e1f5f8a6c','photo-1558591710-4b4a1ae0f04d','photo-15042146448-1d1b0a1a6b1a'],
+ food:['photo-1504674900247-0877df9cc836','photo-1546069901-ba9599a7e63c','photo-1565299624946-b28f40a0ae38','photo-1567620905732-2d1ec7ab7445','photo-1540189549336-e6fe3a1b8a0e','photo-1467003909585-2f8a7270028-3'],
+ travel:['photo-1488646953014-85c08581b8f7','photo-1469854523086-cc02fe5d8800','photo-1502602898657-3e91760cbb34','photo-1530789253388-582c481c54b0','photo-1480714378408-67cf0d13bc1b','photo-1502920917128-1aa500764cbd'],
+ flower:['photo-1490750967868-88aa4486c946','photo-1502977249166-824b3a8a4d6d','photo-1462275646964-a0e3386b89fa','photo-1455659817273-f968652fbd54','photo-1520769669658-f07657f5a307','photo-1416879595882-3373a0480b5b'],
+ sport:['photo-1461896836934-ffe607ba8211','photo-1579952363873-37685e780ea2','photo-1546519638-68e2a5a3e4d4','photo-1517649763962-0c623066013b','photo-1431324155629-1a6deb1dec8d','photo-1543353071-873f17a7a088'],
+ movie:['photo-1485095329183-d0797f0e7d31','photo-1440404653325-ab127d49abc9','photo-1536440136628-849c177e76a5','photo-1478720568477-152d9b164e26','photo-1517604931442-7e0c8ed2963c','photo-1543536448-1e5c0d0b1b9a'],
+ ocean:['photo-1505118380757-91f5f5632de0','photo-1551244072-5d12893278ab','photo-1439405326851-014c7336f690','photo-1500375592092-40eb21681891','photo-1502082553048-f009c37129b9','photo-1518837695005-2083093ee35b'],
+ forest:['photo-1448375240586-882707db888b','photo-1441974231531-c6227db76b6e','photo-1511497584788-876760111969','photo-1508385082359-dc5b6a9d8b3f','photo-1469474968028-56623f02e42e','photo-1426604966848-d7adac402bff']
 };
 const WP_BING_COUNT=8;
 let wpCat='featured',wpBusy=false,wpPage=0,wpSize='pc',wpQuery='',wpSource='mix',wpSeen=new Set(),wpTotal=0;
@@ -11000,15 +11133,19 @@ function wpImg(id,w=1000,q=82){return 'https://images.unsplash.com/'+id+'?auto=f
 function wpFull(id){return 'https://images.unsplash.com/'+id+'?auto=format&fit=max&w=2400&q=94'}
 function wpBing(i,portrait=false){return 'https://bing.biturl.top/?resolution='+(portrait?'1080x1920':'UHD')+'&format=image&index='+((i%WP_BING_COUNT+WP_BING_COUNT)%WP_BING_COUNT)+'&mkt=zh-CN'}
 function wpBing2(i,portrait=false){return 'https://bingw.jasonzeng.dev/?resolution='+(portrait?'1080x1920':'UHD')+'&format=image&index='+((i%WP_BING_COUNT+WP_BING_COUNT)%WP_BING_COUNT)+'&mkt=zh-CN'}
+function wpPicsum(i,portrait=false){const w=portrait?1080:1600,h=portrait?1920:1067;return 'https://picsum.photos/seed/lb'+(((i*7+13)%99999)+(portrait?'p':''))+'/'+w+'/'+h}
+function wpBing3(i,portrait=false){return 'https://api.dujin.org/bing/1920.php?r='+(Date.now()+i)}
+function wpBing4(i,portrait=false){return 'https://bing.img.run/uhd.php?r='+(Date.now()+i)}
 function wpAnime(i){return 'https://api.icatw.site/api/v1/images/random.jpg?category=anime&orientation='+(wpSize==='mobile'?'portrait':'landscape')+'&t='+(Date.now()+i)}
 function wpTitle(){return (WP_TABS.find(t=>t[0]===wpCat)||['','✨ 精选'])[1].replace(/^\S+\s/,'')}
-function wpBuild(){if(!$('#wpTabs'))return;$('#wpTabs').innerHTML=WP_TABS.map(t=>'<button class="wall-cat'+(t[0]===wpCat?' on':'')+'" data-wpcat="'+t[0]+'">'+t[1]+'</button>').join('');$('#wpSources')&&($('#wpSources').innerHTML=['mix','bing','unsplash','anime'].map(k=>{const n={mix:'✨ 综合',bing:'Bing 4K',unsplash:'精选美图',anime:'动漫源'}[k];return '<button class="wp-source'+(k===wpSource?' on':'')+'" data-wpsource="'+k+'">'+n+'</button>'}).join(''))}
+function wpBuild(){if(!$('#wpTabs'))return;$('#wpTabs').innerHTML=WP_TABS.map(t=>'<button class="wall-cat'+(t[0]===wpCat?' on':'')+'" data-wpcat="'+t[0]+'">'+t[1]+'</button>').join('');$('#wpSources')&&($('#wpSources').innerHTML=['mix','bing','unsplash','anime','picsum'].map(k=>{const n={mix:'✨ 综合',bing:'Bing 4K',unsplash:'精选美图',anime:'动漫源',picsum:'随机图'}[k];return '<button class="wp-source'+(k===wpSource?' on':'')+'" data-wpsource="'+k+'">'+n+'</button>'}).join(''))}
 function wpHeroLoad(){const title=wpTitle();let url=wpSource==='bing'?wpBing(wpPage,wpSize==='mobile'):wpSource==='anime'?wpAnime(wpPage):wpSource==='unsplash'?wpFull((WP_SET[wpCat]||WP_SET.featured)[wpPage%(WP_SET[wpCat]||WP_SET.featured).length]):wpFull((WP_SET[wpCat]||WP_SET.featured)[wpPage%(WP_SET[wpCat]||WP_SET.featured).length]);$('#wpHero').innerHTML='<a href="'+dfe(url)+'" class="wall-hero-link" target="_blank" rel="noopener"><img src="'+dfe(url)+'" loading="eager" decoding="async" alt="'+dfe(title)+'"><div class="wall-hero-grad"></div><div class="wall-hero-copy"><small>EDITORIAL PICK · HQ</small><b>'+dfe(title)+'精选</b><span>点击打开高清原图</span></div></a>'}
 function wpMakeItem(url,index,source){const key=source+':'+url;if(wpSeen.has(key))return null;wpSeen.add(key);wpTotal++;const title=wpTitle()+' · '+String(wpTotal).padStart(2,'0');return '<button class="wall-card" data-wpfull="'+dfe(url)+'"><img src="'+dfe(url)+'" loading="lazy" decoding="async" alt="'+dfe(title)+'"><span class="wall-card-over"><b>'+dfe(title)+'</b><small>'+dfe(source)+' · 点击预览</small></span></button>'}
-function wpCandidateUrls(pageIndex){const portrait=wpSize==='mobile';const arr=[];const set=WP_SET[wpCat]||WP_SET.featured;if(wpSource==='bing'){arr.push([wpBing(pageIndex,portrait),'Bing 4K'],[wpBing2(pageIndex,portrait),'Bing 镜像'])}
+function wpCandidateUrls(pageIndex){const portrait=wpSize==='mobile';const arr=[];const set=WP_SET[wpCat]||WP_SET.featured;if(wpSource==='bing'){arr.push([wpBing(pageIndex,portrait),'Bing 4K'],[wpBing2(pageIndex,portrait),'Bing 镜像'],[wpBing3(pageIndex,portrait),'Bing 备用'],[wpBing4(pageIndex,portrait),'Bing 图源'])}
  else if(wpSource==='unsplash'){for(let i=0;i<6;i++)arr.push([wpFull(set[(pageIndex*6+i)%set.length]),'精选美图'])}
  else if(wpSource==='anime'){for(let i=0;i<6;i++)arr.push([wpAnime(pageIndex*6+i),'动漫源'])}
- else {for(let i=0;i<3;i++)arr.push([wpFull(set[(pageIndex*3+i)%set.length]),'精选美图']);arr.push([wpBing(pageIndex,portrait),'Bing 4K']);if(wpCat==='anime'||wpCat==='girl')arr.push([wpAnime(pageIndex),'动漫源'])}
+ else if(wpSource==='picsum'){for(let i=0;i<8;i++)arr.push([wpPicsum(pageIndex*8+i,portrait),'随机图'])}
+ else {for(let i=0;i<3;i++)arr.push([wpFull(set[(pageIndex*3+i)%set.length]),'精选美图']);arr.push([wpBing(pageIndex,portrait),'Bing 4K']);arr.push([wpBing3(pageIndex,portrait),'Bing 备用']);if(wpCat==='anime'||wpCat==='girl')arr.push([wpAnime(pageIndex),'动漫源']);arr.push([wpPicsum(pageIndex,portrait),'随机图'])}
 return arr}
 async function wpLoad(reset=true){if(wpBusy)return;wpBusy=true;const g=$('#wpGallery'),end=$('#wpEnd'),more=$('#wpMore');if(reset){wpPage=0;wpSeen=new Set();wpTotal=0;g.innerHTML='';end.hidden=true;more.hidden=false}more.disabled=true;const arr=[];let tries=0;while(arr.length<(wpSize==='mobile'?8:10)&&tries<4){for(const [url,source] of wpCandidateUrls(wpPage+tries)){if(wpQuery){const q=(wpQuery+' '+wpTitle()).toLowerCase();if(!q.includes(wpQuery.toLowerCase()) && wpQuery.length>1 && !['美','女','人','背','图'].some(k=>wpQuery.includes(k))){} }const c=wpMakeItem(url,tries,source);if(c)arr.push(c);if(arr.length>=(wpSize==='mobile'?8:10))break}tries++}
 if(arr.length){g.insertAdjacentHTML('beforeend',arr.join(''));wpPage+=Math.max(1,tries);end.hidden=true}else{end.hidden=false;more.hidden=true}more.disabled=false;wpBusy=false}
@@ -11253,8 +11390,8 @@ $('#meWipe').addEventListener('click', () => {
  * 参考 MIT 单文件派对游戏的“题库 + Canvas/动画 + Web Audio”思路，原生重做。
  * ================================================================ */
 let PG_STATE={mode:'dice',score:0,truth:'truth',diceHist:[],names:[]};
-const PG_TRUTH=['最近一个让你偷偷开心的人或事情是什么？','你手机里最舍不得删的一张照片是什么？','你最近最想去哪里旅行？','你最奇怪的小习惯是什么？','做过最社死的一件事是什么？','最近一次因为朋友笑到停不下来是什么时候？','在座谁最适合当旅行搭子？为什么？','如果明天完全不用学习/工作，你会怎么过？','你最近最想学会的一项技能？','你小时候最想做什么职业？','你最喜欢别人夸你哪一点？','最近一次认真道歉是什么时候？','你最容易拖延的事情是什么？','你会为了一顿好吃的跑多远？','最近循环最多的一首歌是什么？','在座谁最可能突然去旅行？','你最想重来的一个普通日子是什么？','你最怕别人误会你什么？','你最想收到的一件小礼物是什么？','如果获得一天隐身能力，你会怎么用？'];
-const PG_DARE=['模仿一个在场的人 15 秒，让大家猜是谁。','用播音腔介绍自己的手机 20 秒。','唱你最熟的一句歌。','模仿一个影视角色让大家猜。','用三个表情描述今天的状态。','用方言说一句“今天我状态不错”。','连续做 8 个深蹲，然后摆一个胜利姿势。','给群聊发一句“我刚刚认真思考了人生”，保持 20 秒不解释。','学一种动物叫 8 秒。','用机器人语气说完一句自我介绍。','向右边的人说一句真诚的夸奖。','把自己今天的经历讲成一段新闻播报。','用夸张表情拍一张自拍。','用左手写出自己的名字。','做一个 10 秒钟的慢动作走秀。'];
+const PG_TRUTH=['最近一个让你偷偷开心的人或事情是什么？','你手机里最舍不得删的一张照片是什么？','你最近最想去哪里旅行？','你最奇怪的小习惯是什么？','做过最社死的一件事是什么？','最近一次因为朋友笑到停不下来是什么时候？','在座谁最适合当旅行搭子？为什么？','如果明天完全不用学习/工作，你会怎么过？','你最近最想学会的一项技能？','你小时候最想做什么职业？','你最喜欢别人夸你哪一点？','最近一次认真道歉是什么时候？','你最容易拖延的事情是什么？','你会为了一顿好吃的跑多远？','最近循环最多的一首歌是什么？','在座谁最可能突然去旅行？','你最想重来的一个普通日子是什么？','你最怕别人误会你什么？','你最想收到的一件小礼物是什么？','如果获得一天隐身能力，你会怎么用？','你最近一次鼓起勇气做了什么？','在座谁最像你的反义词？为什么？','你最舍不得删的一条聊天记录是关于什么的？'];
+const PG_DARE=['模仿一个在场的人 15 秒，让大家猜是谁。','用播音腔介绍自己的手机 20 秒。','唱你最熟的一句歌。','模仿一个影视角色让大家猜。','用三个表情描述今天的状态。','用方言说一句“今天我状态不错”。','连续做 8 个深蹲，然后摆一个胜利姿势。','给群聊发一句“我刚刚认真思考了人生”，保持 20 秒不解释。','学一种动物叫 8 秒。','用机器人语气说完一句自我介绍。','向右边的人说一句真诚的夸奖。','把自己今天的经历讲成一段新闻播报。','用夸张表情拍一张自拍。','用左手写出自己的名字。','做一个 10 秒钟的慢动作走秀。','用夸张语气念一句你今天看到的标题。','和左边的人击掌并说“合作愉快”。','模仿一种动物的走路姿势绕场一圈。','用唱歌的方式说出你下一句想说的话。','做 10 秒的自信走秀然后定格。','用方言祝大家今天开心。','给右边的人一个真诚的赞美。','现场编一句押韵的顺口溜。'];
 const PG_PUNISH=['下一轮只能用非惯用手操作手机。','讲一个最近发生的离谱小事。','下一轮由你指定两个人一起摇骰子。','学一个搞笑动作 10 秒。','说一句你最常用的口头禅并重复三遍。','闭眼抽下一题。','做 5 个俯卧撑或 8 个深蹲。','随机挑一个人互夸一句。','模仿主持人宣布“这一轮正式开始”。','下一轮必须先说一句冷笑话才能行动。','自定义一个轻松规则，只持续一轮。','从真心话和大冒险里自选一项。'];
 function pgRandom(a){return a[Math.floor(Math.random()*a.length)]}
 function pgBump(){PG_STATE.score++;$('#pgScore').textContent=PG_STATE.score}
@@ -11266,7 +11403,55 @@ function pgQuestion(){const arr=PG_STATE.truth==='truth'?PG_TRUTH:PG_DARE;const 
 function pgPunish(){ $('#pgPunishText').innerHTML='<div><small>CHALLENGE</small>'+dfe(pgRandom(PG_PUNISH))+'</div>';pgBump() }
 function pgRenderPlayers(){const raw=$('#pgNames').value||'';PG_STATE.names=raw.split(/[\s,，、]+/).map(x=>x.trim()).filter(Boolean).slice(0,24);$('#pgPlayers').innerHTML=PG_STATE.names.length?PG_STATE.names.map(x=>'<span class="player-chip">'+dfe(x)+'</span>').join(''):'<span class="dz-sub">至少输入 2 个名字再转瓶子</span>'}
 function pgSpin(){pgRenderPlayers();if(PG_STATE.names.length<2)return toast('请至少输入 2 个玩家','err');const idx=Math.floor(Math.random()*PG_STATE.names.length),turns=4+Math.floor(Math.random()*3),deg=turns*360+(idx*360/PG_STATE.names.length)+22;const w=$('#pgWheel');w.style.transform='rotate('+deg+'deg)';$('#pgWheelLabel').textContent='旋转中…';setTimeout(()=>{$('#pgWheelLabel').textContent='👉 '+PG_STATE.names[idx];pgBump()},2250)}
-function pgPartyInit(){if(window.__pgBound)return;window.__pgBound=true;const panels={dice:'#pgDice',compare:'#pgCompare',bottle:'#pgBottle',truth:'#pgTruth',dare:'#pgTruth',punish:'#pgPunish'};$('#pgModes').addEventListener('click',e=>{const b=e.target.closest('[data-mode]');if(!b)return;PG_STATE.mode=b.dataset.mode;$$('#pgModes [data-mode]').forEach(x=>x.classList.toggle('on',x===b));Object.entries(panels).forEach(([k,sel])=>{if(document.querySelector(sel))document.querySelector(sel).hidden=k!==PG_STATE.mode});if(PG_STATE.mode==='truth'||PG_STATE.mode==='dare'){PG_STATE.truth=PG_STATE.mode;$('#pgQTag').textContent=PG_STATE.truth.toUpperCase()}});$('#pgRoll').onclick=pgRoll;$('#pgFive').onclick=()=>{for(let i=0;i<5;i++)setTimeout(pgRoll,i*320)};$('#pgClear').onclick=()=>{PG_STATE.diceHist=[];$('#pgDiceFace').innerHTML='';$('#pgDiceTotal').textContent='—';$('#pgDiceTip').textContent='点击按钮开始';$('#pgDiceHist').innerHTML=''};$('#pgCompareGo').onclick=pgCompare;$('#pgQuestionGo').onclick=pgQuestion;$('#pgTruthSwitch').onclick=()=>{PG_STATE.truth=PG_STATE.truth==='truth'?'dare':'truth';$('#pgQTag').textContent=PG_STATE.truth.toUpperCase();toast(PG_STATE.truth==='truth'?'切换到真心话':'切换到大冒险','ok')};$('#pgPunishGo').onclick=pgPunish;$('#pgNames').addEventListener('input',pgRenderPlayers);$('#pgNamesSave').onclick=()=>{pgRenderPlayers();try{LB_STORAGE.setItem('litebox_party_names',JSON.stringify(PG_STATE.names))}catch(_){}toast('玩家名单已保存','ok')};$('#pgSpin').onclick=pgSpin;try{const a=JSON.parse(LB_STORAGE.getItem('litebox_party_names')||'[]');if(Array.isArray(a)){$('#pgNames').value=a.join('\n');pgRenderPlayers()}}catch(_){} }
+const pgLiar={scores:{A:0,B:0},round:1};
+let LIAR=null;
+function pgRoll3(){return Array.from({length:3},()=>1+Math.floor(Math.random()*6))}
+function pgLiarStep(d){if(!LIAR||LIAR.over)return;LIAR.q=clamp(LIAR.q+d,1,6);$('#pgLiarQ').value=LIAR.q}
+function pgLiarStart(keep){
+  if(!keep){pgLiar.scores={A:0,B:0};pgLiar.round=1}
+  LIAR={da:pgRoll3(),db:pgRoll3(),turn:'A',call:null,face:1,q:1,over:false,result:''};
+  $('#pgLiarQ').value=1;
+  $$('#pgLiarFaces button').forEach(x=>x.classList.toggle('on',x.dataset.f==='1'));
+  pgLiarRender();
+}
+function pgLiarRender(){
+  if(!LIAR)return;
+  $('#pgLiarDA').innerHTML=LIAR.da.map(n=>pgDie(n)).join('');
+  $('#pgLiarDB').innerHTML=LIAR.db.map(n=>pgDie(n)).join('');
+  $('#pgLiarA').textContent=pgLiar.scores.A;
+  $('#pgLiarB').textContent=pgLiar.scores.B;
+  $('#pgLiarRound').textContent=pgLiar.round;
+  $('#pgLiarCall').textContent=LIAR.call?('当前叫点：≥ '+LIAR.call.q+' 个 '+LIAR.call.face+' 点'):'尚无叫点';
+  const r=$('#pgLiarResult');r.className='pg-liar-result';r.textContent=LIAR.over?LIAR.result:'';
+  if(LIAR.over){$('#pgLiarTurn').textContent='本局结束 · 点「新一局」继续';$('#pgLiarBid').disabled=true;$('#pgLiarOpen').disabled=true;return;}
+  $('#pgLiarBid').disabled=false;
+  $('#pgLiarOpen').disabled=!LIAR.call;
+  $('#pgLiarTurn').textContent='轮到 玩家 '+LIAR.turn+(LIAR.call?'（加注或开）':'（叫点）');
+}
+function pgLiarBid(){
+  if(!LIAR||LIAR.over)return;
+  if(LIAR.call){
+    const ok=(LIAR.q>LIAR.call.q)||(LIAR.q===LIAR.call.q&&LIAR.face>LIAR.call.face);
+    if(!ok)return toast('必须比上家更大：更多数量，或同数量更大点数','err');
+  }
+  LIAR.call={q:LIAR.q,face:LIAR.face};
+  LIAR.turn=LIAR.turn==='A'?'B':'A';
+  pgLiarRender();
+}
+function pgLiarOpen(){
+  if(!LIAR||LIAR.over||!LIAR.call)return;
+  const f=LIAR.call.face,real=LIAR.da.concat(LIAR.db).filter(x=>x===f).length;
+  const caller=LIAR.turn==='A'?'B':'A';
+  const truth=real>=LIAR.call.q;
+  let winner,loser;
+  if(truth){winner=caller;loser=LIAR.turn;}else{winner=LIAR.turn;loser=caller;}
+  pgLiar.scores[winner]++;
+  LIAR.over=true;
+  LIAR.result='开！实际有 '+real+' 个 '+f+' 点 → '+(truth?'叫点成立':'叫点不成立')+'，玩家 '+loser+' 输，玩家 '+winner+' +1';
+  pgLiar.round++;
+  pgLiarRender();
+}
+function pgPartyInit(){if(window.__pgBound)return;window.__pgBound=true;const panels={dice:'#pgDice',compare:'#pgCompare',bottle:'#pgBottle',liar:'#pgLiar',truth:'#pgTruth',dare:'#pgTruth',punish:'#pgPunish'};$('#pgModes').addEventListener('click',e=>{const b=e.target.closest('[data-mode]');if(!b)return;PG_STATE.mode=b.dataset.mode;$$('#pgModes [data-mode]').forEach(x=>x.classList.toggle('on',x===b));Object.entries(panels).forEach(([k,sel])=>{if(document.querySelector(sel))document.querySelector(sel).hidden=k!==PG_STATE.mode});if(PG_STATE.mode==='truth'||PG_STATE.mode==='dare'){PG_STATE.truth=PG_STATE.mode;$('#pgQTag').textContent=PG_STATE.truth.toUpperCase()}if(PG_STATE.mode==='liar'&&!LIAR)pgLiarStart(true)});$('#pgRoll').onclick=pgRoll;$('#pgFive').onclick=()=>{for(let i=0;i<5;i++)setTimeout(pgRoll,i*320)};$('#pgClear').onclick=()=>{PG_STATE.diceHist=[];$('#pgDiceFace').innerHTML='';$('#pgDiceTotal').textContent='—';$('#pgDiceTip').textContent='点击按钮开始';$('#pgDiceHist').innerHTML=''};$('#pgCompareGo').onclick=pgCompare;$('#pgQuestionGo').onclick=pgQuestion;$('#pgTruthSwitch').onclick=()=>{PG_STATE.truth=PG_STATE.truth==='truth'?'dare':'truth';$('#pgQTag').textContent=PG_STATE.truth.toUpperCase();toast(PG_STATE.truth==='truth'?'切换到真心话':'切换到大冒险','ok')};$('#pgPunishGo').onclick=pgPunish;$('#pgNames').addEventListener('input',pgRenderPlayers);$('#pgNamesSave').onclick=()=>{pgRenderPlayers();try{LB_STORAGE.setItem('litebox_party_names',JSON.stringify(PG_STATE.names))}catch(_){}toast('玩家名单已保存','ok')};$('#pgSpin').onclick=pgSpin;$('#pgLiarNew').onclick=()=>pgLiarStart(true);$('#pgLiarReset').onclick=()=>pgLiarStart(false);$('#pgLiarQm').onclick=()=>pgLiarStep(-1);$('#pgLiarQp').onclick=()=>pgLiarStep(1);$('#pgLiarBid').onclick=pgLiarBid;$('#pgLiarOpen').onclick=pgLiarOpen;$$('#pgLiarFaces button').forEach(b=>b.onclick=()=>{if(!LIAR||LIAR.over)return;LIAR.face=+b.dataset.f;$$('#pgLiarFaces button').forEach(x=>x.classList.toggle('on',x===b))});try{const a=JSON.parse(LB_STORAGE.getItem('litebox_party_names')||'[]');if(Array.isArray(a)){$('#pgNames').value=a.join('\n');pgRenderPlayers()}}catch(_){} }
 
 window.V17_INIT = {
   calendar: () => { if (CAL.view) calRender(); else calInit(); },
@@ -11946,13 +12131,118 @@ document.addEventListener('touchmove',e=>{if(document.body.classList.contains('s
  let lg=get('lb_ledger',[]);const lgRender=()=>{const ym=new Date().toISOString().slice(0,7),a=lg.filter(x=>String(x.date||'').startsWith(ym));const ex=a.filter(x=>x.type==='expense').reduce((s,x)=>s+(+x.amt||0),0),inc=a.filter(x=>x.type==='income').reduce((s,x)=>s+(+x.amt||0),0);$('#lgExpense').textContent='¥'+ex.toFixed(2);$('#lgIncome').textContent='¥'+inc.toFixed(2);$('#lgCount').textContent=a.length;$('#lgList').innerHTML=lg.slice().sort((a,b)=>(b.ts||0)-(a.ts||0)).map(x=>'<div class="record-row"><div><b>'+esc(x.note||x.cat||'记录')+'</b><div class="dz-sub">'+esc(x.date||'')+' · '+esc(x.cat||'其他')+'</div></div><div><strong class="money-'+x.type+'">'+(x.type==='expense'?'-':'+')+'¥'+(+x.amt||0).toFixed(2)+'</strong> <button class="btn" data-lg-del="'+x.id+'">删除</button></div></div>').join('')||'<div class="empty-tip">还没有记账记录</div>'};$('#lgDate').value=new Date().toISOString().slice(0,10);$('#lgAdd')?.addEventListener('click',()=>{const amt=+$('#lgAmt').value;if(!(amt>0))return toast('请输入金额','err');lg.unshift({id:Date.now()+'',ts:Date.now(),amt,type:$('#lgType').value,cat:$('#lgCat').value,note:$('#lgNote').value.trim(),date:$('#lgDate').value||new Date().toISOString().slice(0,10)});set('lb_ledger',lg);$('#lgAmt').value='';$('#lgNote').value='';lgRender();toast('记账成功','ok')});$('#lgList')?.addEventListener('click',e=>{const b=e.target.closest('[data-lg-del]');if(!b)return;lg=lg.filter(x=>String(x.id)!==b.dataset.lgDel);set('lb_ledger',lg);lgRender()});lgRender();
 
  // Meal log
- let ml=get('lb_meals',[]);const mlRender=()=>{const today=new Date().toISOString().slice(0,10),ym=today.slice(0,7),td=ml.filter(x=>x.date===today),mo=ml.filter(x=>String(x.date||'').startsWith(ym));$('#mlToday').textContent='¥'+td.reduce((s,x)=>s+(+x.amt||0),0).toFixed(2);$('#mlMonth').textContent='¥'+mo.reduce((s,x)=>s+(+x.amt||0),0).toFixed(2);$('#mlCount').textContent=mo.length;$('#mlList').innerHTML=ml.slice().sort((a,b)=>(b.ts||0)-(a.ts||0)).map(x=>'<div class="record-row"><div><b>'+esc(x.food||'')+'</b><div class="dz-sub">'+esc(x.date||'')+' · '+esc(x.meal||'')+(x.note?' · '+esc(x.note):'')+'</div></div><div><strong>¥'+(+x.amt||0).toFixed(2)+'</strong> <button class="btn" data-ml-del="'+x.id+'">删除</button></div></div>').join('')||'<div class="empty-tip">还没有伙食记录</div>'};$('#mlAdd')?.addEventListener('click',()=>{const food=$('#mlFood').value.trim();if(!food)return toast('先写吃了什么','err');ml.unshift({id:Date.now()+'',ts:Date.now(),date:new Date().toISOString().slice(0,10),meal:$('#mlMeal').value,food,amt:+$('#mlAmt').value||0,note:$('#mlNote').value.trim()});set('lb_meals',ml);$('#mlFood').value='';$('#mlAmt').value='';$('#mlNote').value='';mlRender();toast('伙食记录已保存','ok')});$('#mlList')?.addEventListener('click',e=>{const b=e.target.closest('[data-ml-del]');if(!b)return;ml=ml.filter(x=>String(x.id)!==b.dataset.mlDel);set('lb_meals',ml);mlRender()});mlRender();
+ let ml=get('lb_meals',[]);const mlMeals=['早餐','午餐','晚餐','零食','饮料'];let MLMEAL='早餐';
+$$('#mlMealChips button').forEach(b=>b.addEventListener('click',()=>{$$('#mlMealChips button').forEach(x=>x.classList.remove('on'));b.classList.add('on');MLMEAL=b.dataset.meal;$('#mlMeal').value=MLMEAL;}));
+function mlTodayGroups(){
+  const today=new Date().toISOString().slice(0,10);
+  const td=ml.filter(x=>x.date===today);
+  if(!td.length)return '<div class="empty-tip">今天还没有记录，记下第一顿吧～</div>';
+  let html='';
+  mlMeals.forEach(m=>{
+    const items=td.filter(x=>x.meal===m);if(!items.length)return;
+    const sum=items.reduce((s,x)=>s+(+x.amt||0),0);
+    html+='<div class="ml-grp"><div class="ml-grp-h"><span>'+esc(m)+'</span><b>¥'+sum.toFixed(2)+'</b></div>';
+    html+=items.map(x=>'<div class="ml-item"><span>'+esc(x.food||'')+(x.note?' <i>'+esc(x.note)+'</i>':'')+'</span><span class="ml-amt">¥'+(+x.amt||0).toFixed(2)+'</span></div>').join('');
+    html+='</div>';
+  });
+  return html;
+}
+const mlRender=()=>{
+  const today=new Date().toISOString().slice(0,10),ym=today.slice(0,7);
+  const td=ml.filter(x=>x.date===today),mo=ml.filter(x=>String(x.date||'').startsWith(ym));
+  $('#mlToday').textContent='¥'+td.reduce((s,x)=>s+(+x.amt||0),0).toFixed(2);
+  $('#mlMonth').textContent='¥'+mo.reduce((s,x)=>s+(+x.amt||0),0).toFixed(2);
+  $('#mlCount').textContent=mo.length;
+  $('#mlGroups').innerHTML=mlTodayGroups();
+  const recent=ml.slice().sort((a,b)=>(b.ts||0)-(a.ts||0)).slice(0,8);
+  $('#mlList').innerHTML=recent.map(x=>'<div class="record-row"><div><b>'+esc(x.food||'')+'</b><div class="dz-sub">'+esc(x.date||'')+' · '+esc(x.meal||'')+(x.note?' · '+esc(x.note):'')+'</div></div><div><strong>¥'+(+x.amt||0).toFixed(2)+'</strong> <button class="btn" data-ml-del="'+x.id+'">删除</button></div></div>').join('')||'<div class="empty-tip">还没有伙食记录</div>';
+};
+$('#mlAdd')?.addEventListener('click',()=>{
+  const food=$('#mlFood').value.trim();if(!food)return toast('先写吃了什么','err');
+  ml.unshift({id:Date.now()+'',ts:Date.now(),date:new Date().toISOString().slice(0,10),meal:MLMEAL,food,amt:+$('#mlAmt').value||0,note:$('#mlNote').value.trim()});
+  set('lb_meals',ml);$('#mlFood').value='';$('#mlAmt').value='';$('#mlNote').value='';mlRender();toast('伙食记录已保存','ok');
+});
+$('#mlList')?.addEventListener('click',e=>{const b=e.target.closest('[data-ml-del]');if(!b)return;ml=ml.filter(x=>String(x.id)!==b.dataset.mlDel);set('lb_meals',ml);mlRender()});
+mlRender();
 
- // Incoming-call simulator
- let cmTimer=null,cmAudio=null;const cmStop=()=>{if(cmTimer){clearInterval(cmTimer);cmTimer=null}if(cmAudio){try{cmAudio.close()}catch(_){}}cmAudio=null};const beep=()=>{try{if($('#cmSound').value==='silent')return;const A=window.AudioContext||window.webkitAudioContext;if(!A)return;const c=cmAudio||new A();cmAudio=c;const o=c.createOscillator(),g=c.createGain();o.type='sine';o.frequency.value=$('#cmSound').value==='pulse'?880:660;g.gain.value=.025;o.connect(g);g.connect(c.destination);o.start();g.gain.exponentialRampToValueAtTime(.001,c.currentTime+.4);o.stop(c.currentTime+.42)}catch(_){}};$('#cmStart')?.addEventListener('click',()=>{cmStop();const n=$('#cmName').value.trim()||'未知来电';$('#cmAvatar').textContent=n.slice(0,1);$('#cmScreenName').textContent=n;$('#cmScreenNum').textContent=$('#cmNum').value.trim()||'未知号码';$('#cmStatus').textContent='正在呼叫…';$('#cmStage').style.display='flex';beep();if($('#cmSound').value!=='silent')cmTimer=setInterval(beep,1800)});$('#cmHang')?.addEventListener('click',()=>{cmStop();$('#cmStage').style.display='none'});$('#cmAccept')?.addEventListener('click',()=>{cmStop();let sec=0;$('#cmStatus').textContent='通话中 00:00';cmTimer=setInterval(()=>{$('#cmStatus').textContent='通话中 '+String(Math.floor(++sec/60)).padStart(2,'0')+':'+String(sec%60).padStart(2,'0')},1000)});
+ // Incoming-call simulator v2.9.5（全屏遮罩，稳定触发）
+ let cmTimer=null,cmCtx=null;const cmStop=()=>{if(cmTimer){clearInterval(cmTimer);cmTimer=null}if(cmCtx){try{cmCtx.close()}catch(_){}}cmCtx=null};
+ const cmBeep=()=>{try{if($('#cmSound').value==='silent')return;const A=window.AudioContext||window.webkitAudioContext;if(!A)return;if(!cmCtx)cmCtx=new A();const c=cmCtx,o=c.createOscillator(),g=c.createGain();o.type='sine';o.frequency.value=($('#cmSound').value==='pulse')?880:660;g.gain.value=.05;o.connect(g);g.connect(c.destination);o.start();g.gain.exponentialRampToValueAtTime(.0001,c.currentTime+.45);o.stop(c.currentTime+.5)}catch(_){}};
+ $('#cmStart')?.addEventListener('click',()=>{cmStop();const n=$('#cmName').value.trim()||'未知来电';$('#cmAvatar').textContent=n.slice(0,1);$('#cmScreenName').textContent=n;$('#cmScreenNum').textContent=$('#cmNum').value.trim()||'未知号码';$('#cmStatus').textContent='正在呼叫…';$('#cmStage').style.display='flex';cmBeep();if($('#cmSound').value!=='silent')cmTimer=setInterval(cmBeep,1700)});
+ $('#cmHang')?.addEventListener('click',()=>{cmStop();$('#cmStage').style.display='none'});
+ $('#cmAccept')?.addEventListener('click',()=>{cmStop();let sec=0;$('#cmStatus').textContent='通话中 00:00';cmTimer=setInterval(()=>{$('#cmStatus').textContent='通话中 '+String(Math.floor(++sec/60)).padStart(2,'0')+':'+String(sec%60).padStart(2,'0')},1000)});
 
  // Period tracker
- const addDays2=(d,n)=>{const x=new Date(d+'T12:00:00');x.setDate(x.getDate()+n);return x.toISOString().slice(0,10)};const pd=get('lb_period',{});$('#pdStart').value=pd.start||new Date().toISOString().slice(0,10);$('#pdCycle').value=pd.cycle||28;$('#pdDays').value=pd.days||5;$('#pdNote').value=pd.note||'';const pdRender=()=>{const a=$('#pdStart').value,c=+$('#pdCycle').value||28,d=+$('#pdDays').value||5;if(!a)return;$('#pdOut').innerHTML='<div class="res-grid"><div class="res-card"><span>下一次估算</span><b>'+addDays2(a,c)+'</b></div><div class="res-card"><span>本次记录</span><b>'+a+' ～ '+addDays2(a,d-1)+'</b></div></div>'};$('#pdSave')?.addEventListener('click',()=>{set('lb_period',{start:$('#pdStart').value,cycle:+$('#pdCycle').value||28,days:+$('#pdDays').value||5,note:$('#pdNote').value.trim()});pdRender();toast('经期记录已保存','ok')});pdRender();
+ const pdAdd=(d,n)=>{const x=new Date(d+'T12:00:00');x.setDate(x.getDate()+n);return x.toISOString().slice(0,10)};
+const pdParse=d=>new Date(d+'T12:00:00');
+const pdDiff=(a,b)=>Math.round((pdParse(a)-pdParse(b))/86400000);
+let PD=get('lb_period',{})||{};
+if(!Array.isArray(PD.starts)){PD.starts=PD.start?[PD.start]:[];}
+$('#pdStart').value=PD.starts[0]||new Date().toISOString().slice(0,10);
+$('#pdCycle').value=PD.cycle||28;
+$('#pdDays').value=PD.days||5;
+$('#pdNote').value=PD.note||'';
+function pdAvgCycle(){
+  const c=+$('#pdCycle').value||28;const s=PD.starts;
+  if(s.length>=2){let tot=0,n=0;for(let i=0;i<s.length-1;i++){const diff=Math.abs(pdDiff(s[i],s[i+1]));if(diff>0&&diff<120){tot+=diff;n++}}if(n)return Math.round(tot/n);}
+  return c;
+}
+function pdPredictDays(visStart,visEnd){
+  const cycle=+$('#pdCycle').value||28,days=Math.max(1,(+$('#pdDays').value||5)),set=new Set();
+  if(!PD.starts.length)return set;
+  let s=PD.starts[0];
+  while(pdParse(s)>pdParse(visStart))s=pdAdd(s,-cycle);
+  for(let cur=s;pdParse(cur)<=pdParse(visEnd);cur=pdAdd(cur,cycle)){for(let i=0;i<days;i++)set.add(pdAdd(cur,i));}
+  return set;
+}
+function pdNextStart(){
+  const cycle=+$('#pdCycle').value||28,today=new Date().toISOString().slice(0,10);
+  if(!PD.starts.length)return null;
+  let s=PD.starts[0];
+  while(pdParse(s)<pdParse(today))s=pdAdd(s,cycle);
+  return s;
+}
+function pdRender(){
+  const today=new Date().toISOString().slice(0,10);
+  const next=pdNextStart();const avg=pdAvgCycle();const days=Math.max(1,(+$('#pdDays').value||5));
+  let stats='<div class="res-grid">';
+  stats+='<div class="res-card"><span>下一次预计</span><b>'+(next||'—')+'</b></div>';
+  stats+='<div class="res-card"><span>距离下次</span><b>'+(next?(pdDiff(next,today)===0?'就是今天':pdDiff(next,today)+' 天'):'—')+'</b></div>';
+  stats+='<div class="res-card"><span>平均周期</span><b>'+avg+' 天</b></div>';
+  stats+='<div class="res-card"><span>经期长度</span><b>'+days+' 天</b></div>';
+  stats+='</div>';
+  $('#pdStats').innerHTML=stats;
+  pdCalendar();
+}
+function pdCalendar(){
+  const today=new Date().toISOString().slice(0,10);
+  const cur=new Date();cur.setDate(1);
+  const visEnd=new Date(cur.getTime());visEnd.setMonth(visEnd.getMonth()+3);visEnd.setDate(0);
+  const set=pdPredictDays(cur.toISOString().slice(0,10),visEnd.toISOString().slice(0,10));
+  const wd=['日','一','二','三','四','五','六'];let html='';
+  for(let m=0;m<3;m++){
+    const first=new Date(cur.getFullYear(),cur.getMonth()+m,1);
+    const y=first.getFullYear(),mo=first.getMonth();
+    const dim=new Date(y,mo+1,0).getDate();const off=first.getDay();
+    html+='<div class="pd-month"><div class="pd-mh">'+y+'年'+(mo+1)+'月</div><div class="pd-grid">';
+    html+=wd.map(w=>'<span class="pd-w">'+w+'</span>').join('');
+    for(let i=0;i<off;i++)html+='<span class="pd-d empty"></span>';
+    for(let d=1;d<=dim;d++){
+      const ds=y+'-'+String(mo+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');
+      let cls='pd-d';if(set.has(ds))cls+=' on';if(ds===today)cls+=' today';
+      html+='<span class="'+cls+'">'+d+'</span>';
+    }
+    html+='</div></div>';
+  }
+  $('#pdCal').innerHTML=html;
+}
+$('#pdSave')?.addEventListener('click',()=>{
+  const start=$('#pdStart').value;
+  if(start){PD.starts=PD.starts.filter(s=>s!==start);PD.starts.unshift(start);PD.starts=PD.starts.slice(0,12);}
+  PD.cycle=+$('#pdCycle').value||28;PD.days=+$('#pdDays').value||5;PD.note=$('#pdNote').value.trim();
+  set('lb_period',PD);pdRender();toast('经期记录已保存','ok');
+});
+pdRender();
 
  // Water tracker
  const wtKey=()=> 'lb_water_'+new Date().toISOString().slice(0,10);const wtRender=()=>{const a=get(wtKey(),[]);$('#wtCount').textContent=a.length;$('#wtMl').textContent=a.reduce((s,x)=>s+(+x||0),0)+' ml';$('#wtGoal').textContent='2000 ml';$('#wtLog').textContent=a.length?'今日记录：'+a.join(' · ')+' ml':'今天还没有饮水记录'};$('#wtAdd')?.addEventListener('click',()=>{const a=get(wtKey(),[]);a.push(+$('#wtCup').value||200);set(wtKey(),a);wtRender();toast('已记录一杯水','ok')});$('#wtReset')?.addEventListener('click',()=>{set(wtKey(),[]);wtRender()});wtRender();
