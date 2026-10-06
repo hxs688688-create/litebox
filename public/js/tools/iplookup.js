@@ -8,12 +8,15 @@
      http(s) 部署环境严格"同源优先"。 */
   const HAS_API = location.protocol === 'http:' || location.protocol === 'https:';
 
-  /* 国家名中英映射 */
+  /* 国家代码 → 中文映射（Step 17：与 functions/api/ip.js 同表。
+     同源 /api/ip 响应已是中文；仅 file:// 直连兜底 ipwho.is 时用 code 转换） */
   const COUNTRY_CN = {
-    'United States': '美国', 'China': '中国', 'Japan': '日本', 'Singapore': '新加坡',
-    'Hong Kong': '中国香港', 'Taiwan': '中国台湾', 'South Korea': '韩国',
-    'United Kingdom': '英国', 'Germany': '德国', 'Canada': '加拿大', 'Australia': '澳大利亚',
-    'France': '法国', 'Netherlands': '荷兰', 'India': '印度', 'Russia': '俄罗斯'
+    CN: '中国', US: '美国', JP: '日本', SG: '新加坡',
+    HK: '中国香港', TW: '中国台湾', MO: '中国澳门', KR: '韩国',
+    GB: '英国', DE: '德国', CA: '加拿大', AU: '澳大利亚',
+    FR: '法国', NL: '荷兰', IN: '印度', RU: '俄罗斯',
+    VN: '越南', TH: '泰国', MY: '马来西亚', ID: '印度尼西亚',
+    IT: '意大利', ES: '西班牙', PH: '菲律宾', BR: '巴西'
   };
 
   let rootEl = null;
@@ -47,19 +50,10 @@
     }
   }
 
-  /* ipapi.co 字段 → 协议格式 */
-  function fromIpapi(d) {
-    return {
-      ip: d.ip, country: d.country_name || d.country || '', region: d.region || '',
-      city: d.city || '', org: d.org || '', asn: (d.asn || '') + '', timezone: d.timezone || '',
-      query: d.ip, source: 'ipapi'
-    };
-  }
-
-  /* ipwho.is 字段 → 协议格式 */
+  /* ipwho.is 字段 → 协议格式（国家用 country_code 查中文映射） */
   function fromIpwho(d, q) {
     return {
-      ip: d.ip || q, country: d.country || '', region: d.region || '', city: d.city || '',
+      ip: d.ip || q, country: COUNTRY_CN[d.country_code] || d.country || '', region: d.region || '', city: d.city || '',
       org: (d.connection && d.connection.org) || '',
       asn: (d.connection && d.connection.asn ? 'AS' + d.connection.asn : '') || '',
       timezone: (d.timezone && d.timezone.id) || '', query: q, source: 'IPWHO'
@@ -68,18 +62,16 @@
 
   function cnCountry(c) { return COUNTRY_CN[c] || c || '—'; }
 
-  /* 查本机：/api/ip → ipapi.co → ipify
-     Step 9：LB.cache 缓存 3 分钟 —— 切走再切回不重发（修复此前每次 mount 重发 3 次请求） */
+  /* 查本机：/api/ip → ipify
+     Step 9：LB.cache 缓存 3 分钟 —— 切走再切回不重发（修复此前每次 mount 重发 3 次请求）
+     Step 15：去掉 ipapi.co 这一级直连 —— 它**不返回 CORS 头**，浏览器直连必然被拦，
+     只会往控制台丢一条 "blocked by CORS policy" 错误（验收要求 Console 0 报错）。
+     ipify 返回 Access-Control-Allow-Origin: *，是唯一真正可用的浏览器直连兜底。 */
   async function fetchSelf() {
     return LB.cache('iplookup:self', 3 * 60 * 1000, function () {
       return tryAPI('/api/ip', async function () {
-        try {
-          const d = await directJSON('https://ipapi.co/json/');
-          return fromIpapi(d);
-        } catch (_) {
-          const d = await directJSON('https://api.ipify.org?format=json');
-          return { ip: d.ip, country: '', region: '', city: '', org: '', asn: '', timezone: '', query: d.ip, source: 'ipify' };
-        }
+        const d = await directJSON('https://api.ipify.org?format=json');
+        return { ip: d.ip, country: '', region: '', city: '', org: '', asn: '', timezone: '', query: d.ip, source: 'ipify' };
       });
     });
   }
@@ -96,13 +88,6 @@
   }
 
   /* source → 显示名 */
-  function srcLabel(d, viaFallback) {
-    const map = { 'IPWHO': 'IPWHO', 'ipapi': 'IPAPI', '同源': 'LiteBox', 'ipify': 'IPIFY' };
-    let s = map[d.source] || d.source || '—';
-    if (viaFallback && d.source !== '同源') s += ' · 直连';
-    return s;
-  }
-
   function render(d, viaFallback, self) {
     if (!rootEl) return;
     const kind = $('#ilKind', rootEl);
@@ -113,9 +98,6 @@
     $('#ilOrg', rootEl).textContent = d.org || '—';
     $('#ilASN', rootEl).textContent = d.asn || '—';
     $('#ilTZ', rootEl).textContent = d.timezone || '—';
-    $('#ilFrom', rootEl).textContent = srcLabel(d, viaFallback);
-    $('#ilSrcs', rootEl).innerHTML =
-      '<span class="il-tag">' + esc(srcLabel(d, viaFallback)) + '</span>';
     $('#ilCard', rootEl).hidden = false;
   }
 
@@ -191,9 +173,7 @@
       '<div class="il-cell"><small>运营商 / 组织</small><b id="ilOrg"></b></div>' +
       '<div class="il-cell"><small>ASN</small><b id="ilASN"></b></div>' +
       '<div class="il-cell"><small>时区</small><b id="ilTZ"></b></div>' +
-      '<div class="il-cell"><small>数据来源</small><b id="ilFrom"></b></div>' +
       '</div>' +
-      '<div class="il-srcs" id="ilSrcs"></div>' +
       '</div>' +
       '<p class="cd-note">IP 归属是网络出口位置；若使用 VPN / 代理，结果通常是代理出口。</p>' +
       '</div>'

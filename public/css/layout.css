@@ -1,6 +1,12 @@
 /* =========================================================
    LiteBox v5 · layout.css — Header / Page / Tabbar / Sheet
    Tabbar 只在本文件定义，其它文件不得再写 .tabbar 规则。
+
+   Step 11 · B7：导航条贴底重写 —— 关键是用 width:fit-content 取代
+   left:0;right:0 / width:100%，让导航条按内容宽度居中而不被拉伸。
+   同时清除本文件历史遗留的全部 !important（红线：!important 只允许
+   出现在 base.css 的 [hidden] 与 prefers-reduced-motion 两处）。
+   这些规则现在都是各自选择器的唯一定义，去掉强制优先级不改变计算值。
    ========================================================= */
 
 /* ---------- Header ---------- */
@@ -13,14 +19,14 @@ header{
 }
 .hd{
   max-width:1080px;margin:0 auto;padding:0 20px;height:100%;
-  display:flex;align-items:center;justify-content:space-between;
+  display:flex;align-items:center;gap:16px;
 }
-.logo{display:flex;align-items:center;gap:9px;color:var(--brand1)}
+.logo{display:flex;align-items:center;gap:9px;color:var(--brand1);flex:0 0 auto}
 .logo svg{width:26px;height:26px}
 .logo b{font-size:17px;color:var(--fg);letter-spacing:.5px}
 .logo-en{font-size:10px;font-weight:800;letter-spacing:3px;color:var(--fg3);transform:translateY(1px)}
 .hd-btn{
-  width:38px;height:38px;border-radius:var(--radius-pill);
+  width:38px;height:38px;border-radius:var(--radius-pill);flex:0 0 auto;
   display:flex;align-items:center;justify-content:center;
   color:var(--fg2);border:1px solid var(--line);
   background:var(--card);
@@ -29,68 +35,207 @@ header{
 .hd-btn svg{width:19px;height:19px}
 .hd-btn:active{transform:scale(.9)}
 
+/* ---------- 顶栏搜索框（Step 23 · 五） ----------
+   原首页 .search-wrap 整体上移进 header：header 本身 sticky，搜索框自然全局可见、
+   天然吸顶，因此 home.css 里的吸顶/is-stuck 逻辑与 --search-h 实测全部删除。
+   宽度弹性：logo 与主题按钮 flex:0 0 auto，搜索框吃掉剩余空间并以 420px 收口。 */
+.hd-search{flex:1 1 auto;position:relative;min-width:0;max-width:420px;margin:0 auto}
+.hd-search input{
+  width:100%;height:38px;padding:0 36px 0 40px;
+  border-radius:12px;border:1px solid var(--line);
+  background:var(--card);color:var(--fg);font-size:14px;outline:none;
+  box-shadow:var(--shadow-sm);
+  transition:border-color 200ms,box-shadow 200ms;
+  -webkit-appearance:none;appearance:none;
+}
+.hd-search input::-webkit-search-cancel-button{-webkit-appearance:none;appearance:none}
+.hd-search input::placeholder{color:var(--fg3)}
+.hd-search input:focus{
+  border-color:var(--brand1);
+  box-shadow:0 0 0 3px color-mix(in srgb,var(--brand1) 15%,transparent);
+}
+.hd-search .search-ic{
+  position:absolute;left:13px;top:50%;transform:translateY(-50%);
+  width:18px;height:18px;color:var(--fg3);pointer-events:none;
+  z-index:1; /* Step 5D：input 的 backdrop-filter 创建 stacking context 且 DOM 靠后会盖住图标，提层修复 */
+}
+.hd-search .sw-clear{
+  position:absolute;right:10px;top:50%;transform:translateY(-50%);
+  width:20px;height:20px;border-radius:50%;
+  background:var(--card2);color:var(--fg3);
+  display:flex;align-items:center;justify-content:center;
+  font-size:13px;line-height:1;
+  transition:transform var(--dur) var(--ease-spring),color 200ms;
+}
+.hd-search .sw-clear:hover{transform:translateY(-50%) rotate(90deg);color:var(--fg)}
+
+/* 手机端：隐藏 LITEBOX 小字腾位，搜索框吃满剩余宽度 */
+@media (max-width:640px){
+  .hd{gap:10px;padding:0 14px}
+  .logo-en{display:none}
+  .hd-search{max-width:none}
+  .hd-search input{height:36px;font-size:13px}
+}
+
 /* ---------- Page 切换 ---------- */
 .page{display:none;padding-bottom:24px}
 .page.active{display:block;animation:lbPageIn .32s var(--ease-spring)}
 @keyframes lbPageIn{from{opacity:0;transform:translateY(10px) scale(.995)}to{opacity:1;transform:none}}
 main{max-width:1080px;margin:0 auto;padding:0 20px}
 
-/* ---------- Tabbar（唯一权威定义） ---------- */
+/* ---------- Tabbar（唯一权威定义，Step 11 · B7；Step 13 · B2 修复框高） ----------
+   Step 13 · B2 用户诊断：底部 padding 里叠加了 env(safe-area-inset-bottom)，
+   框被撑高、上下不对称。现在：
+     · padding 上下完全对称 6px（不再 calc(6px + env(...))）
+     · 不用 margin-bottom、不写 min-height
+     · iPhone 安全区改由 bottom: env(safe-area-inset-bottom) 整体抬升，
+       而不是塞进 padding（任务书 B2 的 iPhone 兼容方案）
+     · line-height:1 防文字行高把 flex 交叉轴撑高 */
 .tabbar{
-  position:fixed;left:50%;bottom:calc(6px + var(--safe-bottom));
-  transform:translateX(-50%);z-index:220;
-  display:flex;gap:2px;padding:6px 7px;border-radius:var(--radius-lg);
+  position:fixed;
+  /* Step 16 · A3：底部不再贴死 0 —— 留 8px 让完整圆角可见（之前 0 会被屏幕边缘切掉下半个圆角） */
+  bottom:calc(8px + env(safe-area-inset-bottom,0px));
+  left:50%;
+  transform:translateX(-50%);
+  width:fit-content;               /* 不拉伸：宽度由按钮内容决定 */
+  max-width:calc(100vw - 24px);
+  padding:6px 7px;                 /* 上下完全对称 */
+  border-radius:22px;              /* Step 16 · A3：四角全圆，完整胶囊（原 22px 22px 0 0 下方是直角） */
+  margin:0;
+  z-index:220;                     /* Step 21 · 三：高于 .sheet-mask(200) —— 弹层打开时导航条浮在遮罩上 */
+  line-height:1;
+  display:flex;gap:2px;
   background:var(--glass-bg);
   backdrop-filter:blur(26px) saturate(1.9);-webkit-backdrop-filter:blur(26px) saturate(1.9);
   border:1px solid var(--glass-border);
   box-shadow:var(--shadow-float),var(--shadow-inset);
-  max-width:calc(100vw - 16px);
 }
 .tabbar button{
   display:flex;flex-direction:column;align-items:center;gap:2px;
-  min-width:56px;height:50px;padding:4px 7px 3px;border-radius:18px;
-  color:var(--fg3);font-size:10.5px;font-weight:700;
+  min-width:54px;height:50px;padding:4px 7px 3px;border-radius:18px;
+  color:var(--fg3);font-size:10.5px;font-weight:700;line-height:1;
   transition:transform var(--dur) var(--ease-spring),background 200ms,color 200ms;
 }
 .tabbar button svg{width:20px;height:20px;stroke:currentColor}
 .tabbar button.on{color:var(--brand1);background:color-mix(in srgb,var(--brand1) 13%,transparent)}
 .tabbar button:active{transform:scale(.9)}
-@media(max-width:560px){.tabbar button{min-width:52px}}
+/* Step 13 · B2：原来这里有一条 @media(max-width:560px){min-width:52px}，
+   把按钮又缩回 52px，和任务书「按钮 min-width 54px」冲突（窄屏正是唯一
+   会命中的场景）。三个按钮 54px 合计约 190px，375px 屏放得下，直接删掉。 */
 
-/* ---------- Sheet（底部弹层） ---------- */
+/* Step 19 · 一 / Step 21 · 三：手机版导航条贴底。
+   桌面默认 bottom:calc(8px + env(...)) 在手机上会"上浮"，手机端改为
+   bottom:0 真正贴底；不再叠加 env(safe-area-inset-bottom)（那会让它上浮），
+   保留完整圆角 22px，iPhone 底部横条盖住 4-6px 可接受。
+   --tabbar-bottom 同步归零，弹层的 bottom（var(--sheet-bottom)）自动跟着落下。
+   本规则与桌面定义同特异性且位于其后，天然覆盖，无需 !important（红线）。 */
+@media (max-width:768px){
+  :root{--tabbar-bottom:0px}
+  .tabbar{
+    bottom:0;
+    padding-bottom:6px;
+  }
+}
+
+/* Step 21 · 三 修复 1：这里原有 body.sheet-open .tabbar{display:none}（Step 13 · B3），
+   任务书要求撤销 —— 弹层打开时导航条保持可见、浮在遮罩之上，
+   sheet.js 也不再往 body 上挂 sheet-open 类。 */
+
+/* 内容区给导航留出空间：滚到底部时最后一个卡片不被遮挡
+   Step 16 · A3：导航条整体上移了 8px，这里同步 +8px 保持同样的余量 */
+html{scroll-padding-bottom:calc(96px + env(safe-area-inset-bottom,0px))}
+
+/* ---------- Sheet（浮在导航条上方的弹层） ----------
+   Step 21 · 三：
+   · 遮罩 z-index 200 < 导航条 220 → 点「我的 / 分类」时导航条一直浮在遮罩上、原位不动；
+   · 弹层不再贴屏幕底边，而是停在导航条顶边上方 8px（--sheet-bottom 在 tokens.css 统一算）；
+   · 动画从 translateY(106%) 屏幕底滑入改成 translateY(30px)+scale(.96) 由下往上浮出，
+     遮罩与弹层分别过渡（mask 只管 opacity，sheet 只管 transform+opacity），避免同时抖动。 */
 .sheet-mask{
-  position:fixed;inset:0;z-index:400;
+  position:fixed;inset:0;z-index:200;
   display:flex;align-items:flex-end;justify-content:center;
-  background:var(--mask-bg);
-  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+  background:var(--mask-bg-soft);
+  backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
   opacity:0;transition:opacity .3s var(--ease-glide);
 }
 .sheet-mask.lb-open{opacity:1}
 /* 关闭渐隐期间挡住误触 */
 .sheet-mask:not(.lb-open){pointer-events:none}
 .sheet{
-  width:min(100%,640px);max-height:82vh;overflow:auto;
-  margin:0 10px calc(10px + var(--safe-bottom));
-  padding:0 20px calc(18px + var(--safe-bottom));
-  border:1px solid var(--glass-border);border-radius:var(--radius-lg);
-  /* Step 5G：恢复实心底色（近乎不透明），并保留 blur 玻璃感。
-     Step 5F 曾降为 62%→52% 半透明 + background-color:transparent，导致弹层透出背后内容。 */
+  position:fixed;left:50%;
+  bottom:var(--sheet-bottom);          /* 弹层底边 = 导航条顶边 + 8px 间隙 */
+  width:min(calc(100% - 20px),640px);
+  max-height:calc(100vh - var(--sheet-bottom) - 60px);
+  max-height:calc(100dvh - var(--sheet-bottom) - 60px);
+  overflow-y:auto;
+  margin:0;
+  padding:0 20px 18px;
+  border:1px solid var(--glass-border);border-radius:var(--radius-lg);   /* 上下都圆角：已不贴屏底 */
+  /* Step 5G：实心底色（近乎不透明）+ blur 玻璃感。
+     Step 5F 曾降到 62%→52% 半透明，导致弹层透出背后内容、边界消失。 */
   background:var(--card);
   backdrop-filter:blur(30px);-webkit-backdrop-filter:blur(30px);
   box-shadow:var(--sheet-shadow);
-  transform:translateY(106%);
-  transition:transform .5s var(--ease-spring);
+  transform:translateX(-50%) translateY(30px) scale(.96);
+  opacity:0;
+  transition:transform .35s var(--ease-spring),opacity .25s var(--ease-glide);
   overscroll-behavior:contain;
 }
-.sheet-mask.lb-open .sheet{transform:translateY(0)}
-/* 弹层头部（标题 + 副标题 + 关闭） */
-.sheet-hd{
-  display:flex;align-items:flex-start;justify-content:space-between;
-  gap:12px;padding:18px 0 12px;position:sticky;top:0;
-  background:transparent;border-bottom:1px solid var(--line-soft); /* Step 5E：去掉不透明背景，消除弹层顶部白框（玻璃背景由 .sheet 自身提供） */
+.sheet-mask.lb-open .sheet{transform:translateX(-50%) translateY(0) scale(1);opacity:1}
+
+/* === 去白框：伪元素与头部一律不画背景 === */
+.sheet::before,
+.sheet::after{
+  content:none;
+  display:none;
+  background:none;
 }
-.sheet-hd h2{font-size:17px;font-weight:800;color:var(--fg)}
-.sheet-hd p{font-size:12px;color:var(--fg3)}
+.sheet h3,
+.sheet .lb414-sheet-head,
+.sheet .lb414-sheet-title,
+.sheet .lb414-sheet-sub{
+  background:transparent;
+  border-radius:0;
+  box-shadow:none;
+  border:none;
+}
+
+/* ---------- 弹层头部（标题 + 副标题 + 关闭） ----------
+   Step 5H 诊断（375px Chromium 实测）：
+     base.css 的 `*{margin:0;padding:0}` 清零了 h2/p 外边距，
+     .sheet-hd 作为 flex 容器被交叉轴压缩到 60px，而内容需要 77.8px，
+     副标题溢出后被紧随其后的 .cat-grid / .sheet-row 压住。
+   修法：显式 height:auto 解除压缩 + 内层 div 纵向排列并给 gap
+   （不改 flex-direction，否则右侧关闭按钮会被挤到下一行）。 */
+.sheet .sheet-hd{
+  display:flex;flex-direction:row;align-items:flex-start;justify-content:space-between;
+  gap:12px;
+  height:auto;min-height:0;
+  padding:18px 0 14px;margin:0 0 14px;
+  /* 保留 sticky：内容滚动时关闭按钮始终可点 */
+  position:sticky;top:0;z-index:2;
+  background:transparent;border:none;border-bottom:1px solid var(--line);
+  /* sticky 头部自身不参与模糊叠加，避免与父级 backdrop-filter 产生二次高光矩形 */
+  backdrop-filter:none;-webkit-backdrop-filter:none;
+  box-shadow:none;
+}
+.sheet .sheet-hd > div{
+  display:flex;flex-direction:column;gap:4px;min-width:0;flex:1 1 auto;
+}
+.sheet .sheet-hd h2{font-size:17px;font-weight:800;color:var(--fg);margin:0 0 4px;line-height:1.35}
+.sheet .sheet-hd p,
+.sheet .sheet-hd > div > p,
+.sheet > h3 + .sub,
+.sheet .sheet-sub,
+.sheet .lb414-sheet-sub{
+  display:block;position:static;float:none;margin:0;
+  font-size:12px;line-height:1.6;color:var(--fg3);
+  overflow-wrap:anywhere;   /* 长文案换行，不把头部撑破 */
+}
+/* 头部与内容区之间不再重复叠加间距 */
+.sheet .sheet-hd + *,
+.sheet .cat-grid,
+.sheet .lb414-sheet-body{margin-top:0}
 
 /* ---------- Toast 容器 ---------- */
 #toasts{
@@ -98,226 +243,4 @@ main{max-width:1080px;margin:0 auto;padding:0 20px}
   transform:translateX(-50%);z-index:600;
   display:flex;flex-direction:column;align-items:center;gap:8px;
   pointer-events:none;width:max-content;max-width:calc(100vw - 32px);
-}
-
-/* =========================================================
-   Step 5F 强制修复
-   ========================================================= */
-
-/* === 修复：弹层白框 ===
-   诊断结论（Chromium 实测）：
-   - .sheet::before / ::after 的 content 均为 none，不是伪元素作祟
-   - .sheet-hd 背景已是 transparent，也不是它造成
-   - 真正原因：--sheet-bg 渐变两端透明度高达 96%/84%（近乎不透明），
-     弹层整体渲染成一块白色实心板，顶部视觉上就是一个白矩形。
-   本段三重兜底，确保任何残留规则都不会再画出白块。 */
-.sheet::before,
-.sheet::after{
-  content:none !important;
-  display:none !important;
-  background:none !important;
-}
-
-.sheet h3,
-.sheet .sheet-hd,
-.sheet .lb414-sheet-head,
-.sheet .lb414-sheet-title,
-.sheet .lb414-sheet-sub{
-  background:transparent !important;
-  border-radius:0 !important;
-  box-shadow:none !important;
-  border:none !important;
-}
-/* sticky 头部自身不参与模糊叠加，避免与父级 backdrop-filter 产生二次高光矩形 */
-.sheet .sheet-hd{
-  backdrop-filter:none !important;
-  -webkit-backdrop-filter:none !important;
-  box-shadow:none !important;
-}
-/* 头部与首个内容块之间不留缝 */
-.sheet > *:first-child{
-  margin-top:0 !important;
-}
-
-/* =========================================================
-   修复：弹层背景（Step 5G）
-   诊断结论：Step 5F 为消除"顶部白框"，把 --sheet-bg 降到 62%→52% 并强制
-   background-color:transparent，结果弹层变成半透明、能看清背后首页内容，
-   玻璃感与卡片边界一起消失（用户反馈"样式坏了"）。
-   本次纠正：弹层恢复为**实心**底色 + blur(30px) 玻璃模糊，
-   即 spec 要求的 var(--card) 近乎实心；同时保留去白框的三重规则。
-   ========================================================= */
-.sheet{
-  background:var(--card) !important;
-  background-image:none !important;
-  backdrop-filter:blur(30px) !important;
-  -webkit-backdrop-filter:blur(30px) !important;
-}
-
-/* --- 以下为 Step 5F 保留的去白框规则（弹层顶部无白框） --- */
-.sheet::before,
-.sheet::after{
-  content:none !important;
-  display:none !important;
-  background:none !important;
-}
-
-.sheet h3,
-.sheet .lb414-sheet-head,
-.sheet .lb414-sheet-title,
-.sheet .lb414-sheet-sub{
-  background:transparent !important;
-  border-radius:0 !important;
-  box-shadow:none !important;
-  border:none !important;
-}
-/* sticky 头部不参与模糊叠加，避免与父级 backdrop-filter 产生二次高光矩形 */
-.sheet .sheet-hd{
-  background:transparent !important;
-  backdrop-filter:none !important;
-  -webkit-backdrop-filter:none !important;
-  box-shadow:none !important;
-}
-
-/* === 修复：底部导航贴合底部（覆盖所有旧定义）===
-   诊断结论：.tabbar 仅在 layout.css:39 定义过一次（bottom:6px + var(--safe-bottom)），
-   并无多处冲突；此处按任务指定值改写并提升优先级，防止后续样式回退。
-   本文件是全站唯一允许对 .tabbar 使用 !important 的位置（任务 Step 5E 约定的唯一例外）。 */
-.tabbar{
-  position:fixed !important;
-  left:50% !important;
-  bottom:calc(4px + env(safe-area-inset-bottom,0px)) !important;
-  transform:translateX(-50%) !important;
-  margin-bottom:0 !important;
-  padding-bottom:6px !important;
-}
-
-/* 内容区给导航留出空间：滚到底部时最后一个卡片不被遮挡 */
-body{
-  padding-bottom:calc(78px + env(safe-area-inset-bottom,0px)) !important;
-}
-
-html{
-  scroll-padding-bottom:calc(84px + env(safe-area-inset-bottom,0px));
-}
-
-/* =========================================================
-   Step 5H 修复：弹层标题与副标题被下方内容压住（真实重叠）
-   =========================================================
-   实测根因（375px 视口，Chromium逐项试验量得）：
-     .sheet-hd 计算高度被压到 60px，而内容实际需要 77.8px：
-       · base.css:6 的 `*{margin:0;padding:0}` 清零了 h2/p 的外边距，
-         标题与副标题之间没有任何间距
-       · 逐步在控制台改样式对比：一旦给 .sheet-hd 设 height:auto，
-         高度立刻从 60px 恢复到 79px（内容不再被裁切）
-     结果 p 溢出父容器 5.8px，被紧随其后的 .cat-grid / .sheet-row 压住
-     —— 正是用户看到的"副标题与网格重叠"。
-
-   修法（保持 .sheet-hd 原本的横向 flex 布局，不要改成 column ——
-   那样会把右侧关闭按钮也挤到下一行）：
-     1. .sheet-hd 显式 height:auto，保证不被flex 交叉轴压缩
-     2. 内层包裹 div 设为纵向 flex，标题与副标题之间给 gap
-     3. 副标题强制 position:static、块级、正常行高
-
-   注意：任务书给的 .lb414-sheet-head / .lb414-sheet-sub 等类名在本项目 DOM 中
-   **根本不存在**（实测命中 0 个，真实结构是 .sheet-hd > div > h2 + p），
-   直接照抄那段 CSS 不会有任何效果。故此处按真实结构修复，
-   同时保留任务书的选择器作为兼容兜底（若将来结构改名也能生效）。 */
-.sheet .sheet-hd,
-.sheet > h3,
-.sheet .lb414-sheet-head{
-  /* 关键：显式 height:auto，解除 flex 布局对交叉轴高度的压缩（实测 60px → 79px） */
-  height:auto !important;
-  min-height:0 !important;
-  /* 保持横向排列：左侧标题+副标题，右侧关闭按钮 */
-  display:flex;
-  flex-direction:row;
-  align-items:flex-start;
-  justify-content:space-between;
-  gap:12px;
-  padding-bottom:14px;
-  margin-bottom:14px;
-  border-bottom:1px solid var(--line);
-}
-/* 保留原设计的 sticky 头部（内容滚动时关闭按钮始终可点）；
-   任务书要求 position:static 是为解决"绝对定位导致的重叠"，
-   但实测本项目重叠并非绝对定位所致，故保留 sticky 只固定高度。 */
-.sheet .sheet-hd{
-  position:sticky;
-  top:0;
-  z-index:2;
-}
-/* 内层包裹 div（真实结构：.sheet-hd > div > h2 + p）：纵向排列并给标题/副标题间距 */
-.sheet .sheet-hd > div{
-  display:flex;
-  flex-direction:column;
-  gap:4px;
-  min-width:0;
-  flex:1 1 auto;
-}
-/* 标题：与副标题拉开距离（原本 margin 被 reset 清零，两者紧贴） */
-.sheet .sheet-hd h2{
-  margin:0 0 4px !important;
-  line-height:1.35;
-}
-/* 副标题：强制回到文档流、块级显示，并给出可读行高 */
-.sheet .sheet-hd p,
-.sheet .sheet-hd > div > p,
-.sheet > h3 + .sub,
-.sheet .sheet-sub,
-.sheet .lb414-sheet-sub{
-  display:block;
-  position:static !important;
-  float:none;
-  margin:0 !important;
-  font-size:12px;
-  line-height:1.6;
-  color:var(--fg3);
-  /* 关键：长文案换行，不把头部撑破 */
-  overflow-wrap:anywhere;
-}
-/* 头部与内容区之间的间距归零（间距已在头部 padding/margin 上给出，避免重复叠加） */
-.sheet .sheet-hd + *,
-.sheet .cat-grid,
-.sheet .lb414-sheet-body{
-  margin-top:0;
-}
-
-/* =========================================================
-   Step 9 强制修正底部导航位置（终极覆盖）
-   =========================================================
-   用户反复反馈多次修改后 .tabbar 仍未完全贴底。
-   诊断结论（grep -rn "tabbar" public/css/*.css 实测）：
-     · .tabbar 主定义只有 layout.css:39 一处，值是 bottom:calc(6px + var(--safe-bottom))
-     · 另有两处历史覆盖：layout.css:186（Step 5F，改为 4px）与tools.css（仅 print 媒体内隐藏）
-   下面这段按任务书要求放在**文件最末尾**，用 html body 提高优先级覆盖任何旧定义；
-   这是「禁 !important」红线的任务书许可例外（覆盖 5 处旧定义）。
-   bottom:0 完全贴底；底部圆角去掉、顶部圆角保留（像"从底部升起的胶囊"）。 */
-html body .tabbar,
-html body #tabbar,
-html body nav.tabbar {
-  position: fixed !important;
-  left: 50% !important;
-  right: auto !important;
-  bottom: 0 !important;
-  top: auto !important;
-  transform: translateX(-50%) !important;
-  margin: 0 !important;
-  margin-bottom: 0 !important;
-  padding: 6px 7px !important;
-  padding-bottom: calc(6px + env(safe-area-inset-bottom, 0px)) !important;
-  border-bottom-left-radius: 0 !important;
-  border-bottom-right-radius: 0 !important;
-  border-top-left-radius: 22px !important;
-  border-top-right-radius: 22px !important;
-  z-index: 220 !important;
-}
-
-/* 内容区确保不被遮挡 */
-html body {
-  padding-bottom: calc(80px + env(safe-area-inset-bottom, 0px)) !important;
-}
-
-html {
-  scroll-padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px)) !important;
 }

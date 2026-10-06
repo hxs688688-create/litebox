@@ -1,4 +1,11 @@
-/* LiteBox v5 · tools/calorie.js — 卡路里查询（238 种食物 + 一日饮食记录）
+/* LiteBox v5 · tools/calorie.js — 卡路里查询（243 种食物 + 一日饮食记录 + 伙食记录联动）
+ *
+ * 【Step 15 · A3 与伙食记录（meallog）的双向联动】
+ *   反向：在这里加一条食物 → 自动往 litebox_meals 写一条「花费为空」的伙食记录
+ *        （amt: 0、fromCalorie: true），这样「吃了什么」在两个工具里一致。
+ *   正向：本页「今日摄入」= 本工具手动记录 + 伙食记录里带热量的条目；
+ *        由本工具同步过去的条目带 fromCalorie 标记，正向汇总时跳过 —— 否则同一条会被算两遍。
+ *   删除联动：删掉手动记录时，同步过去的那条伙食记录也一并删除。
  *
  * 【份量换算：统一以「每 100g / 100ml」为基准】
  *   字典里每条都带 unit（100g 或 100ml），营养值都是「每 100 单位」。
@@ -21,6 +28,7 @@
 
   const LOG_KEY = 'litebox_calorie_log';
   const GOAL_KEY = 'litebox_calorie_goal';
+  const MEAL_KEY = 'litebox_meals';   /* Step 15 · A3：伙食记录（meallog.js 的存储键） */
   const DEFAULT_GOAL = 2000;
 
   /* 分类 chips：全部 + 字典里出现的 9 个分类 */
@@ -49,8 +57,70 @@
     const box = log.find(x => x.date === d);
     return box ? box.items : [];
   }
+
+  /* ================= Step 15 · A3：与伙食记录（meallog）双向联动 =================
+     A3.4 反向：这里加一条食物 → 同步写一条伙食记录（花费为空，amt: 0，fromCalorie: true）
+     A3.3 正向：今日摄入 = 本工具手动记录 + 伙食记录里带热量的条目
+               —— 由本工具同步过去的条目带 fromCalorie 标记，正向汇总时跳过，避免重复计算。 */
+
+  function readMeals() {
+    const raw = LB.storage.get(MEAL_KEY, []);
+    return Array.isArray(raw) ? raw : [];
+  }
+
+  /* 按当前时间猜餐次，同步到伙食记录时用 */
+  function guessMeal() {
+    const h = new Date().getHours();
+    if (h < 10) return '早餐';
+    if (h < 15) return '午餐';
+    if (h < 21) return '晚餐';
+    return '零食';
+  }
+
+  /* 反向同步：返回新建的伙食记录 id，供删除时联动清理 */
+  function syncToMeal(item) {
+    const list = readMeals();
+    const id = 'c' + Date.now().toString(36) + Math.floor(performance.now() % 1e6).toString(36);
+    list.unshift({
+      id: id,
+      ts: Date.now(),
+      date: todayStr(),
+      meal: guessMeal(),
+      food: item.name,
+      amt: 0,                       /* 花费为空 */
+      rate: 3,
+      note: '',
+      kcal: item.kcal,
+      grams: item.grams,
+      unit: item.unit || 'g',
+      foodCat: '',
+      fromCalorie: true
+    });
+    LB.storage.set(MEAL_KEY, list.slice(0, 2000));
+    return id;
+  }
+
+  function removeMeal(mealId) {
+    if (!mealId) return;
+    const list = readMeals().filter(m => m && m.id !== mealId);
+    LB.storage.set(MEAL_KEY, list);
+  }
+
+  /* 正向汇总：伙食记录里今天的热量（跳过本工具同步过去的，避免重复） */
+  function mealKcalToday() {
+    const d = todayStr();
+    let kcal = 0, n = 0;
+    readMeals().forEach(r => {
+      if (!r || r.date !== d || r.fromCalorie) return;
+      if (typeof r.kcal !== 'number' || !isFinite(r.kcal)) return;
+      kcal += r.kcal; n++;
+    });
+    return { kcal: kcal, n: n };
+  }
+
   function pushItem(item) {
     const d = todayStr();
+    item.mealId = syncToMeal(item);   /* A3.4：同步到伙食记录 */
     let box = log.find(x => x.date === d);
     if (!box) { box = { date: d, items: [] }; log.unshift(box); }
     box.items.push(item);
@@ -181,8 +251,10 @@
   function renderLog() {
     if (!rootEl) return;
     const items = todayItems();
-    let kcal = 0, pro = 0, fat = 0, carb = 0;
-    items.forEach(it => { kcal += it.kcal; pro += it.protein; fat += it.fat; carb += it.carb; });
+    let own = 0, pro = 0, fat = 0, carb = 0;
+    items.forEach(it => { own += it.kcal; pro += it.protein; fat += it.fat; carb += it.carb; });
+    const fromMeal = mealKcalToday();          /* A3.3：伙食记录里的热量也算今日摄入 */
+    const kcal = own + fromMeal.kcal;
     const g = goal();
     $('#calKcal', rootEl).textContent = r1(kcal);
     $('#calLeft', rootEl).textContent = r1(Math.max(0, g - kcal));
@@ -196,9 +268,19 @@
     fill.classList.toggle('full', pct >= 100);
     $('#calPct', rootEl).textContent = r1(kcal) + ' / ' + g + ' kcal（' + Math.round(pct) + '%）';
 
+    /* 来源拆分：手动记录 / 伙食记录 */
+    const src = $('#calSrc', rootEl);
+    if (src) {
+      src.textContent = fromMeal.n
+        ? '手动记录 ' + r1(own) + ' kcal · 伙食记录 ' + fromMeal.n + ' 条 ' + r1(fromMeal.kcal) + ' kcal（已合并统计）'
+        : '手动记录 ' + r1(own) + ' kcal · 暂无伙食记录热量';
+    }
+
     const rows = $('#calRows', rootEl);
     if (!items.length) {
-      rows.innerHTML = '<p class="td-empty">今天还没有记录，去「查询」里搜个食物加进来吧～</p>';
+      rows.innerHTML = '<p class="td-empty">' + (fromMeal.n
+        ? '今天手动记录为空，但伙食记录里已有 ' + fromMeal.n + ' 条带热量的条目，已计入上方统计。'
+        : '今天还没有记录，去「查询」里搜个食物加进来吧～') + '</p>';
       return;
     }
     rows.innerHTML = items.map((it, i) =>
@@ -224,11 +306,14 @@
   /* 复制今日总结：必须同步调用 LB.copyNow */
   function copySummary() {
     const items = todayItems();
-    if (!items.length) { LB.toast('今天还没有记录', 'info'); return; }
-    let kcal = 0, pro = 0, fat = 0, carb = 0;
-    items.forEach(it => { kcal += it.kcal; pro += it.protein; fat += it.fat; carb += it.carb; });
+    const fromMeal = mealKcalToday();
+    if (!items.length && !fromMeal.n) { LB.toast('今天还没有记录', 'info'); return; }
+    let own = 0, pro = 0, fat = 0, carb = 0;
+    items.forEach(it => { own += it.kcal; pro += it.protein; fat += it.fat; carb += it.carb; });
+    const kcal = own + fromMeal.kcal;
     const lines = [todayStr() + ' 饮食记录（目标 ' + goal() + ' kcal）'];
     items.forEach(it => lines.push('· ' + it.name + ' ' + it.grams + (it.unit || 'g') + ' — ' + it.kcal + ' kcal'));
+    if (fromMeal.n) lines.push('· 伙食记录 ' + fromMeal.n + ' 条 — ' + r1(fromMeal.kcal) + ' kcal');
     lines.push('合计：' + r1(kcal) + ' kcal ｜ 蛋白 ' + r1(pro) + 'g ｜ 脂肪 ' + r1(fat) + 'g ｜ 碳水 ' + r1(carb) + 'g');
     const txt = lines.join('\n');
     if (!LB.copyNow(txt, '今日总结已复制')) LB.toast('复制失败，请手动选中复制', 'err');
@@ -278,6 +363,7 @@
       '<div class="wt-bar"><div class="wt-fill" id="calFill"></div></div>' +
       '<div class="wt-pct-row"><small>今日进度</small><small id="calPct"></small></div>' +
       '</div>' +
+      '<p class="cd-note" id="calSrc"></p>' +
       '<div class="ml-rows" id="calRows"></div>' +
       '<div class="set-btns"><button class="btn btn-ghost" id="calCopy" type="button">📋 复制今日总结</button></div>' +
       '<p class="cd-note">记录只保存在本设备浏览器；跨天后自动开始新的一天，历史记录仍会保留。热量与营养为参考值。</p>' +
@@ -318,7 +404,14 @@
       LB.confirm(del, () => {
         const d = todayStr();
         const box = log.find(x => x.date === d);
-        if (box) { box.items.splice(parseInt(del.dataset.del, 10), 1); saveLog(); }
+        if (box) {
+          const idx = parseInt(del.dataset.del, 10);
+          const gone = box.items[idx];
+          /* A3.4：连带删掉同步到伙食记录的那条，避免留下"孤儿"记录 */
+          if (gone && gone.mealId) removeMeal(gone.mealId);
+          box.items.splice(idx, 1);
+          saveLog();
+        }
         renderLog();
         LB.toast('已删除', 'ok');
       }, 3000, { iconOnly: true });

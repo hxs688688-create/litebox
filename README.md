@@ -1,6 +1,6 @@
 # 轻工具箱 LiteBox v5
 
-本地优先的免费在线工具集，114 个实用工具 + 13 个后端接口。
+本地优先的免费在线工具集，114 个实用工具 + 15 个后端接口。
 
 ## 快速开始
 
@@ -36,14 +36,14 @@ npx wrangler pages deploy public
 │   │   ├── registry/     # 分类与工具注册表
 │   │   ├── ui/           # UI 模块（首页 / 导航 / 弹层 / 搜索）
 │   │   ├── api/          # 网络请求封装
-│   │   ├── tools/        # 114 个工具模块
+│   │   ├── tools/        # 121 个工具模块
 │   │   ├── router.js     # 路由
 │   │   └── app.js        # 启动入口
 │   ├── vendor/           # 第三方库（按需加载，不进首屏）
 │   └── vendor/dict/      # 内置数据表（拼音 / 简繁 / 诗词 / 成语 / 农历…）
 ├── functions/            # Cloudflare Pages Functions
 │   ├── _utils.js         # 公共工具（不注册为路由）
-│   └── api/              # 13 个 API 接口
+│   └── api/              # 15 个 API 接口
 └── wrangler.toml         # Cloudflare 配置（含 [ai] binding）
 ```
 

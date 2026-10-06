@@ -1,6 +1,8 @@
-/* LiteBox v5 · tools/wallpaper.js — 壁纸精选（Step 5H：主源换 Wallhaven 高清壁纸；
+/* LiteBox v5 · tools/wallpaper.js — 壁纸精选
+ *  Step 11 · B1：后端主源换为 wp.upx8.com（降级链 upx8 → Wallhaven → Picsum）；
+ *                前端在拿到 JSON 后先预加载前 4 张，加载完成再渲染网格。
  *  后端 /api/wallpaper 返回同源代理地址 → /api/wallpaper-image 真实取图；
- *  loremflickr 早已全站 401 失效，前端降级路径同步改为代理，避免后端挂掉时直连死源）
+ *  loremflickr 早已全站 401 失效，前端降级路径同步改为代理，避免后端挂掉时直连死源。
  *  Step 6B-4：新增「今日精选」大图卡片（当日固定，localStorage 记住当日选中图）
  *              与浏览历史（litebox_wall_seen，最多 200 条，已看过的加载时过滤） */
 (function () {
@@ -122,6 +124,28 @@
     LB.storage.remove(SEEN_KEY);
     LB.toast('浏览记录已清除，接下来会重新展示这些图', 'ok');
     load(true);
+  }
+
+  /* Step 11 · B1：缩略图预加载。
+     拿到 JSON 后先把前 4 张拉进浏览器缓存，再渲染网格 ——
+     否则会出现「先铺 10 个空框、图一张张跳出来」的闪烁。
+     任何一张失败或超时都立即放行：绝不让一张图卡住整个网格。 */
+  const PRELOAD_N = 4;
+  function preloadThumbs(items) {
+    const list = (items || [])
+      .map(x => String(x.thumb || x.url || ''))
+      .filter(Boolean)
+      .slice(0, PRELOAD_N);
+    if (!list.length) return Promise.resolve();
+    return Promise.all(list.map(url => new Promise(resolve => {
+      let done = false;
+      const finish = () => { if (!done) { done = true; resolve(); } };
+      const img = new Image();
+      img.onload = finish;
+      img.onerror = finish;
+      img.src = url;
+      setTimeout(finish, 4000);   /* 超时兜底：慢网也不至于一直等 */
+    })));
   }
 
   async function loadImages(c, p, sz, q) {
@@ -306,7 +330,11 @@
     try {
       const data = await loadImages(cat, page, size, searchQ);
       if (my !== seq) return;
-      renderMore(Array.isArray(data.items) ? data.items : []);
+      const items = Array.isArray(data.items) ? data.items : [];
+      /* B1：先预加载前 4 张，加载完成（或超时）再渲染网格 */
+      await preloadThumbs(items);
+      if (my !== seq) return;
+      renderMore(items);
     } catch (e) {
       if (my !== seq) return;
       $('#wpEnd', rootEl).hidden = true;
@@ -375,7 +403,7 @@
       '<p class="hl-empty" id="wpEnd" hidden></p>' +
       '<button class="btn btn-ghost wp-more" id="wpMore" type="button">加载更多</button>' +
       '<button class="btn btn-ghost wp-clear" id="wpClearSeen" type="button">🗑 清除浏览记录</button>' +
-      '<p class="cd-note">支持精选、美女、动漫、风景、游戏、文字、视觉、国风、简约、星空、动物、城市、汽车、科技、手机等分类。浏览记录只保存在本机浏览器（最多 200 条），用于避免重复推送看过的图。图片来自 LoremFlickr / Unsplash，版权归原作者所有，请按来源许可使用。</p>' +
+      '<p class="cd-note">支持精选、美女、动漫、风景、游戏、文字、视觉、国风、简约、星空、动物、城市、汽车、科技、手机等分类。浏览记录只保存在本机浏览器（最多 200 条），用于避免重复推送看过的图。</p>' +
       '</div>' +
       '<div class="wp-lightbox" id="wpLightbox" hidden>' +
       '<button class="wp-lb-close" id="wpLbClose" type="button" aria-label="关闭">✕</button>' +

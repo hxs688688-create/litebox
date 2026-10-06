@@ -104,7 +104,8 @@
         host = this._unmountCurrent() || host;   /* Step 8：host 可能已被克隆替换 */
         if (host) { host.hidden = true; host.classList.remove('active'); }
         pages.forEach(p => p.classList.toggle('active', p.id === 'page-home'));
-        LB.ui.home.renderRecent && LB.ui.home.renderRecent();
+        /* Step 23 · 六：首页不再展示最近使用，这里只刷新收藏（litebox_rec 仍照常写入，
+           「我的」弹层要用）。 */
         LB.ui.home.renderFav && LB.ui.home.renderFav();
 
         if (shouldRestore) {
@@ -205,6 +206,18 @@
 
     init() {
       /* 工具脚本通过 js/tools/{id}.js 自注册；此处无需静态登记 */
+
+      /* Step 22 · 三：返回按钮全局兜底。
+         docbox 的左上角箭头点了没反应，根因是它自己的 mount 里漏了 [data-back] 绑定
+         —— 全站 120+ 工具各自手写这条绑定，漏一个就坏一个，所以在路由层统一兜住。
+         工具自己的绑定照常执行；hash 重复赋同一个值不会产生第二次 hashchange。
+         data-go 保留任务书写法（.back[data-go="home"]），默认回首页。 */
+      document.addEventListener('click', e => {
+        const back = e.target.closest && e.target.closest('.back, [data-back]');
+        if (!back) return;
+        e.preventDefault();
+        LB.hash.go(back.getAttribute('data-go') || 'home');
+      });
     },
 
     /* Step 6A：给当前工具页注入分享按钮
@@ -233,44 +246,29 @@
       }
     },
 
-    /* Step 8：统一隐私 / 来源声明。
-       - 联网工具（registry 标 web:true）在页脚标注数据来源；
-       - 涉及"上传图片/文件或输入敏感信息"的本地工具标注"仅本机处理、不上传"；
+    /* Step 8：统一隐私声明。
+       - 涉及「上传图片/文件或输入敏感信息」的本地工具标注「仅本机处理、不上传」；
        - 其余工具（如进制转换）不强加。
+       Step 11 红线：**界面上不得标注任何数据来源**（如「数据来源：xxx.com」），
+       故原先给联网工具打的「📌 数据来源：…」页脚已整体移除，
+       下面只保留本地处理声明。
        幂等：已存在 .tool-footer 则跳过，不覆盖工具自己的页脚说明。 */
     _injectTrust(toolId, host) {
       if (!host || !host.isConnected || host.querySelector('.tool-footer')) return;
       const tool = Array.isArray(LB.tools) ? LB.tools.find(t => t.id === toolId) : null;
       if (!tool) return;
 
-      /* 联网工具：标注数据来源 */
-      const ONLINE_SOURCE = {
-        iplookup: 'ipwho.is / ip-api.com',
-        weather: 'open-meteo.com',
-        fxrate: 'open.er-api.com',
-        dnslookup: 'dns.alidns.com / dns.google',
-        webarchive: 'web.archive.org / arquivo.pt',
-        hotlist: '60s API 社区镜像',
-        translate: 'MyMemory 翻译服务',
-        wallpaper: 'Wallhaven / 本地聚合',
-        train: '12306 官方跳转',
-        shorturl: 'is.gd / tinyurl',
-        speedtest: 'Cloudflare / npmmirror',
-        mirror: '公共镜像站'
-      };
-
-      /* 本地工具：只对"上传图片/文件"或"输入敏感信息"类注入本地处理声明 */
+      /* 本地工具：只对「上传图片/文件」或「输入敏感信息」类注入本地处理声明 */
       const LOCAL_DECLARE_IDS = [
         'idphoto', 'compress', 'watermark', 'grid9', 'crop', 'fix', 'imgbatch',
-        'image64', 'gifmake', 'meme', 'docscan', 'exif', 'pdf', 'docbox',
+        'image64', 'gifmake', 'docscan', 'exif', 'pdf', 'docbox',
+        'imgstyle',
         'resume', 'notes', 'ledger', 'meallog', 'assets', 'period', 'water',
         'calorie', 'todo', 'quicklinks', 'subscriptions', 'daymatter'
       ];
 
       let note = '';
-      if (tool.web && ONLINE_SOURCE[toolId]) {
-        note = '📌 数据来源：' + ONLINE_SOURCE[toolId];
-      } else if (LOCAL_DECLARE_IDS.indexOf(toolId) > -1) {
+      if (LOCAL_DECLARE_IDS.indexOf(toolId) > -1) {
         note = '🔒 文件仅在本机浏览器内处理，不上传服务器';
       }
       if (!note) return;

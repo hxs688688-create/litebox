@@ -1,4 +1,8 @@
-/* LiteBox v5 · tools/quicksearch.js — 综合搜索（一键跳转到各平台搜索）
+/* LiteBox v5 · tools/quicksearch.js — 综合搜索（选平台 → 输关键词 → 新标签打开）
+ *
+ * Step 12 · B6：UI 从「九宫格按钮墙」改成「平台下拉 + 输入框 + 搜索按钮」。
+ *   原来的九宫格有 12 个按钮，点哪个就搜哪个，但用户得先在一堆图标里找目标平台；
+ *   下拉选择更省屏幕、也更明确「当前要搜哪个平台」。
  *
  * 【关键词必须 encodeURIComponent】
  *   任务书示例直接写 url: 'https://www.baidu.com/s?wd={q}' 然后字符串替换。
@@ -36,12 +40,25 @@
     { name: '微信', icon: '💬', app: true }   /* 无网页搜索 URL，改为唤起 App */
   ];
 
+  function current() {
+    const v = parseInt($('#qsPlat', rootEl).value, 10);
+    return PLATFORMS[v] || PLATFORMS[0];
+  }
+
   function query() { return String($('#qsIn', rootEl).value || '').trim(); }
 
   function target(p, q) {
     /* app 类平台单独处理；其余把 {q} 换成编码后的关键词 */
     if (p.app) return null;
     return p.url.replace('{q}', encodeURIComponent(q));
+  }
+
+  /* 按钮文案跟着选中的平台走，避免「选了知乎、按钮还写着百度搜索」的错位感 */
+  function syncGo() {
+    const b = $('#qsGo', rootEl);
+    if (!b) return;
+    const p = current();
+    b.textContent = '🔍 在' + p.name + '搜索';
   }
 
   function open(p) {
@@ -70,29 +87,29 @@
     if (!w) LB.toast('浏览器拦截了新标签，请允许弹出窗口', 'info');
   }
 
-  function renderGrid() {
-    $('#qsGrid', rootEl).innerHTML = PLATFORMS.map((p, i) =>
-      '<button class="qs-cell" type="button" data-i="' + i + '">' +
-      '<span class="qs-ic" aria-hidden="true">' + p.icon + '</span>' +
-      '<span class="qs-nm">' + LB.dom.esc(p.name) + '</span>' +
-      '</button>').join('');
-  }
-
   function html() {
     return (
       '<div class="tool-head">' +
       '<button class="back" data-back type="button" aria-label="返回"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 5.5 8 12l6.5 6.5"/></svg></button>' +
-      '<div><h1>综合搜索</h1><p>输入关键词，一键跳转到各平台搜索</p></div>' +
+      '<div><h1>综合搜索</h1><p>选平台、输关键词，一键在新标签打开对应搜索页</p></div>' +
       '</div>' +
       '<div class="tool-body">' +
-      '<div class="qs-bar">' +
+      '<div class="qs-form">' +
+      '<label class="qs-lab">选择平台' +
+      '<select class="inp" id="qsPlat" aria-label="选择搜索平台">' +
+      PLATFORMS.map((p, i) =>
+        '<option value="' + i + '"' + (i === 0 ? ' selected' : '') + '>' + p.icon + ' ' + LB.dom.esc(p.name) + '</option>'
+      ).join('') +
+      '</select>' +
+      '</label>' +
+      '<label class="qs-lab">搜索关键词' +
       '<input class="inp" id="qsIn" type="search" placeholder="输入关键词，如：轻工具箱" aria-label="搜索关键词">' +
-      '<button class="btn btn-main js-primary-submit" id="qsGo" type="button">百度搜索</button>' +
+      '</label>' +
+      '<button class="btn btn-main js-primary-submit qs-go" id="qsGo" type="button">🔍 在百度搜索</button>' +
       '</div>' +
-      '<p class="cd-note">回车用百度搜索。点击下方平台在新标签打开对应搜索页。</p>' +
-      '<div class="qs-grid" id="qsGrid"></div>' +
+      '<p class="cd-note">回车即按当前选中的平台搜索。微信一栏在手机端会尝试唤起 App（桌面端无法唤起）。</p>' +
       '<p class="cd-note">本工具只负责拼接搜索链接并跳转，不会把关键词发给任何第三方服务；' +
-      '搜索行为发生在你点开的目标平台上。微信一栏在手机端会尝试唤起 App。</p>' +
+      '搜索行为发生在你点开的目标平台上。</p>' +
       '</div>'
     );
   }
@@ -100,18 +117,13 @@
   function mount(root) {
     rootEl = root;
     root.innerHTML = html();
-    renderGrid();
+    syncGo();
 
+    $('#qsPlat', root).addEventListener('change', syncGo);
     $('#qsIn', root).addEventListener('keydown', e => {
-      if (e.key === 'Enter') { e.preventDefault(); open(PLATFORMS[0]); }
+      if (e.key === 'Enter') { e.preventDefault(); open(current()); }
     });
-    /* 主按钮：回车与 Ctrl+Enter 都落到百度搜索这一条路径上 */
-    $('#qsGo', root).addEventListener('click', () => open(PLATFORMS[0]));
-    $('#qsGrid', root).addEventListener('click', e => {
-      const b = e.target.closest('.qs-cell');
-      if (!b) return;
-      open(PLATFORMS[parseInt(b.dataset.i, 10)]);
-    });
+    $('#qsGo', root).addEventListener('click', () => open(current()));
     root.addEventListener('click', e => {
       if (e.target.closest('[data-back]')) LB.hash.go('home');
     });

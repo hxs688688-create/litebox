@@ -1,8 +1,14 @@
-/* LiteBox v5 · vendor/dict/foods.js — 常见食物热量与三大营养素库（238 条）
+/* LiteBox v5 · vendor/dict/foods.js — 常见食物热量与三大营养素库（243 条）
    字段：n 名称 / cat 分类 / kcal 热量 / protein 蛋白质 / fat 脂肪 / carb 碳水 / unit 计量单位
    分类：主食 / 肉类 / 水产 / 蛋奶 / 蔬菜 / 水果 / 饮料 / 零食 / 快餐
-   数值单位：每 100g 或每 100ml 可食部；kcal 为千卡（大卡）。
-   数据来源：中国食物成分表（第 6 版）及公开营养资料整理，常见菜品/快餐为估算参考值。
+   数值单位：每 100g 或每 100ml **可食部**；kcal 为千卡（大卡）。
+   数据来源：
+     · 基础食材（主食 / 肉类 / 水产 / 蛋奶 / 蔬果）—— 中国食物成分表（第 6 版，2018，中国 CDC）
+       的每 100g 可食部数值；
+     · 饮料 / 包装食品 / 快餐 —— 品牌官方营养成分表或同类产品公开营养资料。
+   ★ 生熟口径：名称里带「（煮）」「（干）」「（鲜）」的即为该状态下的数值，
+     例如「白米饭」是蒸熟的饭（116 kcal/100g），不是生米；生米约 346 kcal/100g。
+     用错状态会让热量差出 2~3 倍，记录时请按实际入口状态选。
    加载方式：LB.dict.load('foods') —— 挂载名与文件名一致，dict.js 无需加映射。
    ⚠ 仅供饮食记录参考，不构成营养或医学建议。 */
 window.LB = window.LB || {};
@@ -33,6 +39,7 @@ window.LB.dict.foods = [
   { n: '饺子（猪肉）', cat: '主食', kcal: 253, protein: 9.0, fat: 9.0, carb: 33.0, unit: '100g' },
   { n: '馄饨', cat: '主食', kcal: 190, protein: 7.0, fat: 6.0, carb: 26.0, unit: '100g' },
   { n: '蛋炒饭', cat: '主食', kcal: 163, protein: 4.5, fat: 4.0, carb: 27.0, unit: '100g' },
+  { n: '包子（猪肉）', cat: '主食', kcal: 227, protein: 8.0, fat: 8.0, carb: 30.0, unit: '100g' },
   { n: '汤圆（黑芝麻）', cat: '主食', kcal: 311, protein: 4.5, fat: 9.0, carb: 51.0, unit: '100g' },
   { n: '苏打饼干', cat: '主食', kcal: 408, protein: 8.4, fat: 7.7, carb: 76.2, unit: '100g' },
 
@@ -104,6 +111,7 @@ window.LB.dict.foods = [
   { n: '咸鸭蛋', cat: '蛋奶', kcal: 190, protein: 12.7, fat: 12.7, carb: 6.3, unit: '100g' },
   { n: '皮蛋', cat: '蛋奶', kcal: 171, protein: 14.2, fat: 10.7, carb: 4.5, unit: '100g' },
   { n: '鹌鹑蛋', cat: '蛋奶', kcal: 160, protein: 12.8, fat: 11.1, carb: 2.1, unit: '100g' },
+  { n: '鸭蛋', cat: '蛋奶', kcal: 180, protein: 12.6, fat: 13.0, carb: 3.1, unit: '100g' },
   { n: '全脂牛奶', cat: '蛋奶', kcal: 54, protein: 3.0, fat: 3.2, carb: 3.4, unit: '100ml' },
   { n: '脱脂牛奶', cat: '蛋奶', kcal: 33, protein: 3.4, fat: 0.1, carb: 4.8, unit: '100ml' },
   { n: '酸奶', cat: '蛋奶', kcal: 72, protein: 2.5, fat: 2.7, carb: 9.3, unit: '100g' },
@@ -192,8 +200,9 @@ window.LB.dict.foods = [
   { n: '圣女果', cat: '水果', kcal: 22, protein: 0.9, fat: 0.2, carb: 5.8, unit: '100g' },
 
   /* ---------- 饮料 ---------- */
-  { n: '可口可乐', cat: '饮料', kcal: 42, protein: 0, fat: 0, carb: 10.6, unit: '100ml' },
+  { n: '可口可乐', cat: '饮料', kcal: 43, protein: 0, fat: 0, carb: 10.8, unit: '100ml' },
   { n: '奶茶（全糖）', cat: '饮料', kcal: 90, protein: 1.5, fat: 2.5, carb: 15.0, unit: '100ml' },
+  { n: '雪碧', cat: '饮料', kcal: 43, protein: 0, fat: 0, carb: 10.5, unit: '100ml' },
   { n: '珍珠奶茶', cat: '饮料', kcal: 100, protein: 1.5, fat: 3.0, carb: 16.0, unit: '100ml' },
   { n: '美式咖啡', cat: '饮料', kcal: 2, protein: 0.2, fat: 0, carb: 0.3, unit: '100ml' },
   { n: '拿铁咖啡', cat: '饮料', kcal: 55, protein: 3.0, fat: 3.0, carb: 5.0, unit: '100ml' },
@@ -219,6 +228,7 @@ window.LB.dict.foods = [
   /* ---------- 零食（含坚果） ---------- */
   { n: '薯片', cat: '零食', kcal: 548, protein: 6.6, fat: 37.0, carb: 49.7, unit: '100g' },
   { n: '巧克力', cat: '零食', kcal: 589, protein: 4.3, fat: 40.1, carb: 53.4, unit: '100g' },
+  { n: '饼干（消化饼）', cat: '零食', kcal: 435, protein: 7.0, fat: 12.0, carb: 73.0, unit: '100g' },
   { n: '方便面', cat: '零食', kcal: 472, protein: 9.5, fat: 21.1, carb: 61.6, unit: '100g' },
   { n: '花生（炒）', cat: '零食', kcal: 601, protein: 21.7, fat: 48.0, carb: 23.8, unit: '100g' },
   { n: '瓜子（炒）', cat: '零食', kcal: 606, protein: 22.6, fat: 52.8, carb: 17.3, unit: '100g' },
@@ -262,5 +272,6 @@ window.LB.dict.foods = [
   { n: '小笼包', cat: '快餐', kcal: 220, protein: 9.0, fat: 8.0, carb: 27.0, unit: '100g' },
   { n: '皮蛋瘦肉粥', cat: '快餐', kcal: 60, protein: 3.0, fat: 1.5, carb: 8.0, unit: '100g' },
   { n: '关东煮', cat: '快餐', kcal: 90, protein: 6.0, fat: 3.0, carb: 9.0, unit: '100g' },
+  { n: '沙县小吃（拌面）', cat: '快餐', kcal: 180, protein: 6.0, fat: 4.0, carb: 30.0, unit: '100g' },
   { n: '粽子（肉）', cat: '快餐', kcal: 220, protein: 6.0, fat: 7.0, carb: 33.0, unit: '100g' },
 ];

@@ -42,7 +42,7 @@
       '    <small>支持 .txt / .md / .csv</small>' +
       '    <button class="btn btn-ghost btn-sm fm-pick">选择文件</button>' +
       '  </div>' +
-      '  <input type="file" id="fmFile" multiple accept=".txt,.md,.csv" hidden>' +
+      '  <input type="file" id="fmFile" multiple accept=".txt,.md,.csv,text/plain" hidden>' +
       '  <div class="fm-btns"><button class="btn btn-main" id="fmGo">🧩 合并并下载</button></div>' +
       '  <div class="fm-stat" id="fmStat">选择文件后可合并</div>' +
       '  <p class="fm-note">按文件选择顺序合并，自动加文件标题。不上传，纯本地。</p>' +

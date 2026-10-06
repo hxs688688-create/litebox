@@ -7,8 +7,8 @@
   <meta name="theme-color" content="#0e1118" media="(prefers-color-scheme: dark)">
   <meta name="color-scheme" content="light dark">
 
-  <title>轻工具箱 LiteBox · 114 个免费在线小工具</title>
-  <meta name="description" content="轻工具箱 LiteBox 是本地优先的免费在线工具集：证件照换底色、图片压缩、PDF 工具箱、GPA 计算、卡路里查询、高校查询、菜谱、天气、IP 查询、热榜等 114 个实用工具，无需注册，数据不上传。">
+  <title>轻工具箱 LiteBox · 122 个免费在线小工具</title>
+  <meta name="description" content="轻工具箱 LiteBox 是本地优先的免费在线工具集：证件照换底色、图片压缩、PDF 工具箱、GPA 计算、卡路里查询、高校查询、菜谱、天气、IP 查询、热榜等 122 个实用工具，无需注册，数据不上传。">
   <meta name="keywords" content="在线工具,免费工具,工具箱,证件照,图片压缩,PDF,GPA计算器,天气查询,IP查询,本地优先">
   <meta name="author" content="LiteBox">
   <meta name="robots" content="index,follow,max-image-preview:large">
@@ -17,8 +17,8 @@
 
   <!-- Open Graph / 分享卡片 -->
   <meta property="og:type" content="website">
-  <meta property="og:title" content="轻工具箱 LiteBox · 114 个免费在线小工具">
-  <meta property="og:description" content="证件照、图片压缩、PDF、GPA、天气、IP 查询等 114 个本地优先工具，无需注册，数据不上传。">
+  <meta property="og:title" content="轻工具箱 LiteBox · 122 个免费在线小工具">
+  <meta property="og:description" content="证件照、图片压缩、PDF、GPA、天气、IP 查询等 122 个本地优先工具，无需注册，数据不上传。">
   <meta property="og:image" content="/og-image.png">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
@@ -26,8 +26,8 @@
 
   <!-- Twitter Card -->
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="轻工具箱 LiteBox · 114 个免费在线小工具">
-  <meta name="twitter:description" content="证件照、图片压缩、PDF、GPA、天气、IP 查询等 114 个本地优先工具。">
+  <meta name="twitter:title" content="轻工具箱 LiteBox · 122 个免费在线小工具">
+  <meta name="twitter:description" content="证件照、图片压缩、PDF、GPA、天气、IP 查询等 122 个本地优先工具。">
   <meta name="twitter:image" content="/og-image.png">
 
   <!-- PWA -->
@@ -41,9 +41,7 @@
   <link rel="icon" type="image/svg+xml" href="/icon.svg">
   <link rel="apple-touch-icon" href="/icon-192.png">
 
-  <!-- 预连接（只针对关键域名，不滥用） -->
-  <link rel="preconnect" href="https://images.unsplash.com" crossorigin>
-  <link rel="dns-prefetch" href="https://images.unsplash.com">
+  <!-- 图片一律走同源代理 /api/wallpaper-image，无需对外站预连接（不滥用 preconnect） -->
 
   <!-- CSS -->
   <link rel="stylesheet" href="css/tokens.css">
@@ -59,7 +57,7 @@
     "@context": "https://schema.org",
     "@type": "WebApplication",
     "name": "轻工具箱 LiteBox",
-    "description": "本地优先的免费在线工具集，114 个实用工具，无需注册。",
+    "description": "本地优先的免费在线工具集，122 个实用工具，无需注册。",
     "url": "https://litebox.pages.dev",
     "applicationCategory": "UtilitiesApplication",
     "operatingSystem": "Any",
@@ -75,6 +73,12 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.2" y="3.2" width="17.6" height="17.6" rx="4.6"/><path d="M9 8.2v7.6h6.4"/></svg>
         <b>轻工具箱</b><span class="logo-en">LITEBOX</span>
       </a>
+      <!-- Step 23 · 五：搜索框从首页 hero 下方挪到顶栏，全局可见（header 本身 sticky，天然吸顶） -->
+      <div class="hd-search">
+        <svg class="search-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m20.5 20.5-4.8-4.8"/></svg>
+        <input type="search" id="homeSearch" placeholder="搜索工具…" autocomplete="off" aria-label="搜索工具">
+        <button class="sw-clear" id="swClear" hidden type="button" aria-label="清空搜索">×</button>
+      </div>
       <button class="hd-btn" id="themeBtn" type="button" aria-label="切换深浅主题"></button>
     </div>
   </header>
@@ -179,12 +183,21 @@
   <script defer src="js/ui/skeleton.js"></script>
   <!-- Step 10 · 防误触（LB.lock 防连点 / LB.confirm 二次确认） -->
   <script defer src="js/ui/lock.js"></script>
-  <script defer src="vendor/qrcode-generator.js"></script>
+  <!-- Step 16 · A4 · 二维码生成（qrcode@1.5.3，本仓库自打包 UMD，全局名 QRCode） -->
+  <script defer src="vendor/qrcode.min.js"></script>
   <script defer src="vendor/jsQR.js"></script>
+  <!-- Step 11 · B4 · GIF 逐帧解析（GIF 制作的「GIF 转图片 / GIF 转视频」用；约 18KB） -->
+  <script defer src="vendor/gifuct-js.min.js"></script>
   <!-- Step 6D · 敏感词库（小红书文案检测器使用；其余字典仍走 LB.dict.load 按需加载） -->
   <script defer src="vendor/dict/sensitive-words.js"></script>
+  <!-- Step 15 · B3 · 压缩包工具（@zip.js/zip.js，UMD，全局名 zip；支持 AES-256 加解密） -->
+  <script defer src="vendor/zip.min.js"></script>
+  <!-- Step 20 · A4 · 字符编码检测（jschardet 3.1.4，UMD，全局名 jschardet；字幕互转的乱码修复用） -->
+  <script defer src="vendor/jschardet.min.js"></script>
   <script defer src="js/api/client.js"></script>
   <script defer src="js/tools/image-common.js"></script>
+  <!-- Step 16 · A1 · FFmpeg.wasm 共享封装（vconv / acut 的转码 tab 用；核心 32MB 仍是按需加载） -->
+  <script defer src="js/tools/ffmpeg-common.js"></script>
   <script defer src="js/router.js"></script>
   <script defer src="js/app.js"></script>
 </body>

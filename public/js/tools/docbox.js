@@ -602,6 +602,13 @@
 
     $$('.doc-tab', rootEl).forEach(b => b.addEventListener('click', () => setTab(b.dataset.tab)));
 
+    /* Step 22 · 三：本工具此前漏了返回按钮的绑定（router.js 现已全局兜底）。
+       data-go="home" 与 data-back 同时给出，两种写法都能命中。 */
+    $('.tool-head .back', rootEl).setAttribute('data-go', 'home');
+    rootEl.addEventListener('click', e => {
+      if (e.target.closest('[data-back]')) LB.hash.go('home');
+    });
+
     bindDrop('#docEpubDrop', '#docEpubFile', files => { const f = files[0]; if (f) epubToTxt(f); });
     bindDrop('#docPdfDrop', '#docPdfFile', files => { const f = files[0]; if (f) pdfToTxt(f); });
     bindDrop('#docDocxDrop', '#docDocxFile', files => { const f = files[0]; if (f) docxToTxt(f); });

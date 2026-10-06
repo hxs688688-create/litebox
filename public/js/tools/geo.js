@@ -227,6 +227,61 @@
     }
   }
 
+  /* ---------- Step 11 · B2：获取当前位置 ----------
+     拿到坐标后填进当前维度输入框，三个格式会照常联动反算。
+     城市名是「顺带」的：反向地理编码失败只显示坐标，不影响主流程。
+     注意：geolocation 只在安全上下文（https / localhost）可用，
+     非安全上下文浏览器会直接走失败回调。 */
+  function setLocated(lat, lon, city) {
+    const box = $('#geoLoc', rootEl);
+    if (box) {
+      box.textContent = '纬度 ' + fmtDd(lat) + ' · 经度 ' + fmtDd(lon) + (city ? ' · ' + city : '');
+      box.hidden = false;
+    }
+    /* 顺手把当前维度填进输入框：用户点完定位通常就是要复制这个数 */
+    activeField = 'dd';
+    $('#geoDd', rootEl).value = fmtDd(axis === 'lat' ? lat : lon);
+    onEdit('dd');
+  }
+
+  function getCurrentLocation() {
+    if (!navigator.geolocation) {
+      LB.fail('定位', '当前浏览器不支持', '请手动输入经纬度');
+      return;
+    }
+    const btn = $('#geoLocBtn', rootEl);
+    if (btn) { btn.disabled = true; btn.textContent = '📍 定位中…'; }
+
+    const done = () => {
+      if (btn) { btn.disabled = false; btn.textContent = '📍 获取当前位置'; }
+    };
+
+    navigator.geolocation.getCurrentPosition(
+      function (pos) {
+        const latitude = pos.coords.latitude;
+        const longitude = pos.coords.longitude;
+        /* 先落坐标：城市查不到也不该让用户白等一场 */
+        setLocated(latitude, longitude, '');
+        done();
+
+        fetch('https://nominatim.openstreetmap.org/reverse?format=json&lat=' +
+          latitude + '&lon=' + longitude + '&zoom=10')
+          .then(function (r) { return r.json(); })
+          .then(function (d) {
+            const a = (d && d.address) || {};
+            const city = a.city || a.town || a.county || a.state || '';
+            if (city) setLocated(latitude, longitude, city);
+          })
+          .catch(function () { /* 只显示坐标 */ });
+      },
+      function () {
+        done();
+        LB.fail('定位', '用户拒绝授权', '请手动输入或检查浏览器权限');
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+    );
+  }
+
   function html() {
     return (
       '<div class="tool-head">' +
@@ -247,15 +302,18 @@
       '<input class="inp mono" id="geoDms" type="text" placeholder="39° 54\' 15.12&quot;" aria-label="度分秒"></label>' +
       '</div>' +
       '<p class="cd-note" id="geoHint"></p>' +
+      '<p class="jst" id="geoLoc" hidden></p>' +
       '<div class="set-btns">' +
       '<button class="btn btn-main js-primary-submit" id="geoCopy" type="button">📋 复制十进制度</button>' +
+      '<button class="btn btn-ghost" id="geoLocBtn" type="button">📍 获取当前位置</button>' +
       '<button class="btn btn-ghost" type="button" data-s="0">北京</button>' +
       '<button class="btn btn-ghost" type="button" data-s="1">上海</button>' +
       '<button class="btn btn-ghost" type="button" data-s="2">悉尼（南纬）</button>' +
       '</div>' +
       '<p class="cd-note">三个框可以任选一个输入，另两个实时反算。' +
       '可识别的写法：<b>39.9042</b>、<b>39°54.252\'</b>、<b>39°54\'15.12"</b>，' +
-      '负号表示南纬 / 西经。所有换算与复制都在本机完成，不联网。</p>' +
+      '负号表示南纬 / 西经。换算与复制都在本机完成；只有点「📍 获取当前位置」时' +
+      '才会向浏览器申请定位权限。</p>' +
       '</div>'
     );
   }
@@ -274,6 +332,7 @@
     $('#geoDm', root).addEventListener('input', () => onEdit('dm'));
     $('#geoDms', root).addEventListener('input', () => onEdit('dms'));
     $('#geoCopy', root).addEventListener('click', copyDd);
+    $('#geoLocBtn', root).addEventListener('click', getCurrentLocation);
     root.addEventListener('click', e => {
       const s = e.target.closest('[data-s]');
       if (s) { loadSample(parseInt(s.dataset.s, 10)); return; }

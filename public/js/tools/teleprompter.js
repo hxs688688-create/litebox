@@ -1,4 +1,5 @@
-/* LiteBox v5 · tools/teleprompter.js — 提词器（匀速滚动演讲稿 + 手持弹幕）
+/* LiteBox v5 · tools/teleprompter.js — 提词器（匀速滚动演讲稿）
+ * Step 20 · A2：手持弹幕拆分为独立工具 danmu，本文件只保留提词功能。
  *
  * 【滚动位置为什么不能只靠 scrollPos 累加】
  *   任务书示例是 `scrollPos += speed; container.scrollTop = scrollPos;`。
@@ -12,27 +13,19 @@
  *   setInterval 的句柄不存下来，unmount 时就没法 clearInterval。
  *   一旦不清，切到其它工具页后提词仍在后台每秒跑 30 次回调，
  *   既浪费又会在访问已卸载节点时报错。
- *
- * 【弹幕用 CSS animation 而非 JS 定时器】
- *   任务书要求横向滚动用 @keyframes danmuScroll。CSS 动画由合成器线程驱动，
- *   即使元素已被移除浏览器也会自动回收，不存在泄漏问题。
- *   但要通过 el.remove() 摘掉节点，且「新增弹幕」时重启动画让新弹幕从头进。
  */
 (function () {
   'use strict';
 
-  const { $, $$ } = LB.dom;
+  const { $ } = LB.dom;
   let rootEl = null;
 
-  let mode = 'prompter';     /* prompter | danmu */
   let scrollTimer = null;
   let running = false;
   let fsEl = null;           /* 全屏 overlay */
   let onKey = null;
   let onClick = null;
   let onFsChange = null;
-  let danmuSeq = 0;
-  let danmuTimers = [];      /* 弹幕自动移除的 setTimeout 句柄 */
 
   /* ---------- 提词模式 ---------- */
   function speed() { return parseInt($('#tpSpeed', rootEl).value, 10); }
@@ -83,45 +76,6 @@
     if (c) c.scrollTop = 0;
   }
 
-  /* ---------- 弹幕模式 ---------- */
-  function addDanmu() {
-    const inp = $('#dmText', rootEl);
-    const txt = String(inp.value || '').trim().slice(0, 50);
-    if (!txt) { LB.toast('先输入弹幕内容', 'info'); return; }
-    const color = $('#dmColor', rootEl).value;
-    const dur = parseInt($('#dmSpeed', rootEl).value, 10);
-    const track = $('#dmTrack', rootEl);
-    if (!track) return;
-
-    const el = document.createElement('div');
-    el.className = 'dm-item';
-    el.textContent = txt;
-    el.style.color = color;
-    /* 速度滑块 5-30 → 时长 12s-4s，越大越快 */
-    el.style.setProperty('--dur', (14 - dur * 0.32).toFixed(2) + 's');
-    /* 上下错开，避免所有弹幕挤在同一条视线上（弹幕不能互相遮挡） */
-    el.style.top = (8 + (danmuSeq % 4) * 20) + '%';
-    danmuSeq++;
-    track.appendChild(el);
-
-    /* 动画是 infinite（任务书要求），跑完2 个周期就摘节点：
-       既保证完整滚过两轮，又不让 DOM 随按发射次数无限膨胀 */
-    const cycle = 14 - dur * 0.32;
-    const t = setTimeout(() => {
-      el.remove();
-      danmuTimers = danmuTimers.filter(x => x !== t);
-    }, cycle * 2000 + 400);
-    danmuTimers.push(t);
-    inp.value = '';
-  }
-
-  function clearDanmu() {
-    const track = $('#dmTrack', rootEl);
-    if (track) track.innerHTML = '';
-    danmuTimers.forEach(t => clearTimeout(t));
-    danmuTimers = [];
-  }
-
   /* ---------- 全屏 ---------- */
   function enterFullscreen(el) {
     if (!el) return;
@@ -136,23 +90,16 @@
     } catch (_) { /* 忽略：CSS 已让它铺满 */ }
   }
 
-  function startFs(kind) {
+  function startFs() {
     if (fsEl) return;
-    const c = stage();
-    if (kind === 'prompter') {
-      if (!$('#tpText', rootEl).value.trim()) { LB.toast('先输入要提的文本', 'info'); return; }
-      fsEl = c;
-      fsEl.classList.add('tp-fs');
-    } else {
-      fsEl = $('#dmStage', rootEl);
-      if (!fsEl) return;
-      fsEl.classList.add('tp-fs');
-    }
+    if (!$('#tpText', rootEl).value.trim()) { LB.toast('先输入要提的文本', 'info'); return; }
+    fsEl = stage();
+    if (!fsEl) return;
+    fsEl.classList.add('tp-fs');
     document.body.classList.add('tp-fs-lock');
     enterFullscreen(fsEl);
     /* 任务书：「退出：点击屏幕或按 ESC」。
-       这里监听元素自身而不是 document —— 因为弹幕模式下用户要连续点/划，
-       挂到 document 会让误触立刻退出，反而不好用。 */
+       这里监听元素自身而不是 document —— 提词滚动时误触不应立刻退出。 */
     onClick = () => stopFs();
     fsEl.addEventListener('click', onClick);
     onKey = e => {
@@ -177,33 +124,13 @@
     }
   }
 
-  /* ---------- 模式切换 ---------- */
-  function setMode(m) {
-    if (mode === m) return;
-    /* 切换前先收尾：定时器 / 全屏 / 弹幕定时器一个都不能漏 */
-    stop();
-    stopFs();
-    clearDanmu();
-    mode = m;
-    $$('.tp-mode', rootEl).forEach(b => b.classList.toggle('on', b.dataset.m === m));
-    $('#tpPane', rootEl).hidden = m !== 'prompter';
-    $('#dmPane', rootEl).hidden = m !== 'danmu';
-  }
-
   function html() {
     return (
       '<div class="tool-head">' +
       '<button class="back" data-back type="button" aria-label="返回"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 5.5 8 12l6.5 6.5"/></svg></button>' +
-      '<div><h1>提词器</h1><p>演讲直播滚动提词，含手持弹幕模式</p></div>' +
+      '<div><h1>提词器</h1><p>演讲直播录制视频的匀速滚动提词；手持弹幕已拆分为独立工具</p></div>' +
       '</div>' +
       '<div class="tool-body">' +
-      '<div class="seg seg-2">' +
-      '<button class="tp-mode on" data-m="prompter" type="button">📜 提词模式</button>' +
-      '<button class="tp-mode" data-m="danmu" type="button">🎉 弹幕模式</button>' +
-      '</div>' +
-
-      /* ---------- 提词模式 ---------- */
-      '<div id="tpPane">' +
       '<textarea class="inp mono" id="tpText" rows="6" placeholder="把演讲稿粘进来，全屏后匀速滚动。&#10;建议每句话之间空一行，滚到某句时刚好停顿。" spellcheck="false"></textarea>' +
       '<div class="tp-stage" id="tpStage" aria-live="off"></div>' +
       '<div class="set-btns">' +
@@ -220,25 +147,7 @@
       '<input type="range" id="tpLine" min="1" max="3" step="0.1" value="1.6"></label>' +
       '</div>' +
       '<label class="chk-row"><input type="checkbox" id="tpMirror"><span>镜像显示（摄像镜头反字用）</span></label>' +
-      '</div>' +
-
-      /* ---------- 弹幕模式 ---------- */
-      '<div id="dmPane" hidden>' +
-      '<div class="dm-stage" id="dmStage"><div class="dm-track" id="dmTrack"></div></div>' +
-      '<div class="dm-add">' +
-      '<input class="inp" id="dmText" type="text" maxlength="50" placeholder="输入弹幕（最多 50 字）" aria-label="弹幕内容">' +
-      '<input class="inp dm-color" id="dmColor" type="color" value="#ffffff" aria-label="弹幕颜色">' +
-      '</div>' +
-      '<div class="set-btns">' +
-      '<button class="btn btn-main js-primary-submit" id="dmGo" type="button">🚀 发射</button>' +
-      '<button class="btn btn-ghost" id="dmClear" type="button">清空</button>' +
-      '<button class="btn btn-ghost" id="dmFs" type="button">📺 全屏</button>' +
-      '</div>' +
-      '<label class="tp-lab">滚动速度 <output id="dmSpeedV">15</output>' +
-      '<input type="range" id="dmSpeed" min="5" max="30" step="1" value="15"></label>' +
-      '</div>' +
-
-      '<p class="cd-note">提词模式全屏后按 Esc 退出；弹幕模式会把弹幕铺满屏幕横滚，适合聚会 / 直播现场互动。</p>' +
+      '<p class="cd-note">全屏后点击屏幕或按 Esc 退出；想要手机灯牌（手持弹幕）请使用「手持弹幕」工具。</p>' +
       '</div>'
     );
   }
@@ -263,21 +172,12 @@
   function mount(root) {
     rootEl = root;
     root.innerHTML = html();
-    mode = 'prompter';
     running = false; scrollTimer = null; fsEl = null;
     onKey = null; onClick = null; onFsChange = null;
-    danmuSeq = 0; danmuTimers = [];
 
-    $$('.tp-mode', root).forEach(b => b.addEventListener('click', () => setMode(b.dataset.m)));
     $('#tpGo', root).addEventListener('click', () => (running ? stop() : start()));
     $('#tpTop', root).addEventListener('click', toTop);
-    $('#tpFs', root).addEventListener('click', () => startFs('prompter'));
-    $('#dmGo', root).addEventListener('click', addDanmu);
-    $('#dmClear', root).addEventListener('click', e => LB.confirm(e.currentTarget, clearDanmu));
-    $('#dmFs', root).addEventListener('click', () => startFs('danmu'));
-    $('#dmText', root).addEventListener('keydown', e => {
-      if (e.key === 'Enter') { e.preventDefault(); addDanmu(); }
-    });
+    $('#tpFs', root).addEventListener('click', startFs);
 
     /* 三个滑块 + 镜像开关都实时生效：改值即重绘，不等点按钮 */
     [['#tpSpeed', '#tpSpeedV'], ['#tpSize', '#tpSizeV'], ['#tpLine', '#tpLineV']].forEach(pair => {
@@ -286,7 +186,6 @@
         applyStageStyle();
       });
     });
-    $('#dmSpeed', root).addEventListener('input', e => { $('#dmSpeedV', root).textContent = e.target.value; });
     $('#tpMirror', root).addEventListener('change', applyStageStyle);
     $('#tpText', root).addEventListener('input', applyStageStyle);
 
@@ -297,13 +196,11 @@
   }
 
   function unmount() {
-    /* ★ 三样都必须收：滚动定时器、全屏态、弹幕移除定时器。
+    /* ★ 两样都必须收：滚动定时器、全屏态。
        少清任何一样都会在离开页面后继续跑。 */
     if (scrollTimer) { clearInterval(scrollTimer); scrollTimer = null; }
     running = false;
     stopFs();
-    danmuTimers.forEach(t => clearTimeout(t));
-    danmuTimers = [];
     rootEl = null;
   }
 

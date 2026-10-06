@@ -1,23 +1,43 @@
-/* LiteBox v5 · tools/docscan.js — 文档矫正（拖四角逐透视校正 + 自动白纸增强）
+/* LiteBox v5 · tools/docscan.js — 文档矫正（拖四角 → jscanify 拉正 + 自动白纸增强）
  *
- * 【算法链路】
+ * 【Step 22 · 二：拉正引擎换成 jscanify】
+ *   主路径：拖好的四角 → jscanify.extractPaper() → 底层 OpenCV.js 的
+ *   getPerspectiveTransform + warpPerspective（C++/wasm，边缘与插值都比手写稳）。
+ *   兜底：引擎脚本 8.99MB（vendor/jscanify.min.js = opencv.js + jscanify.js 合并单文件），
+ *   首次点「拉正」才动态加载；加载/执行失败 → 回退 Step 19 的自研反向映射算法，
+ *   并 toast「已使用简化模式」，功能不断档。
+ *
+ * 【自研兜底算法链路（保留原样）】
  *   源图4 角（拖动得到）→ 单应性矩阵 H（8 元一次方程组）→
- *   目标矩形逐像素**反向映射**回源图 → 双线性插值取色→ 白纸增强
+ *   目标矩形逐像素**反向映射**回源图 → 双线性插值取色 → 白纸增强
  *
  * 【为什么必须反向映射，不能正向映射】
  *   正向（源→目标）对每个源像素算目标位置，落在非整数位置的像素会丢失，
  *   输出出现空洞/锯齿。反向映射（目标→源）保证每个目标像素都有值，
- *   这是图像变换的标准做法。
+ *   这是图像变换的标准做法。jscanify 内部做的同样是反向映射。
  *
  * 【为什么用双线性插值，不能用最近邻】
  *   最近邻只取 1 个邻居，放大 2倍会出现明显的马赛克块；
  *   双线性取 4 个邻居加权，边缘平滑。任务书「关键提醒」第 4 条也点名了这点。
+ *
+ * 【Step 11 · B3：上传后"图片不显示"的根因】
+ *   真正的原因不在本文件，而在 tools.css：
+ *     .ds-canvas-wrap canvas{... background:var(--card2)}   ← 特异性 0,1,1
+ *   这条规则会把容器里**每一个** canvas 都涂上不透明底色，
+ *   而覆盖层 canvas（.ds-overlay，z-index:1）正好压在源图 canvas 上面，
+ *   于是一整块纯色把源图盖住 —— 用户看到的就是空白卡片。
+ *   tools.css 里已用更高特异性把 .ds-overlay 还原为透明；
+ *   本文件同时按任务书要求做了三处加固：
+ *     1) canvas 尺寸一律用 width/height **属性**设置（不用 CSS 定尺寸）
+ *     2) drawImage 传 4 参数（dx, dy, dw, dh）
+ *     3) 源图 canvas 就位后再建覆盖层与四角手柄，并对 clientWidth=0 的竞态重试
  */
 (function () {
   'use strict';
 
   const { $ } = LB.dom;
   let rootEl = null;
+  let alive = false;         /* Step 22 · 二：引擎是异步加载的，回调前必须确认工具还在页面上 */
   let img = null;            /* HTMLImageElement */
   let srcCv = null;          /* 显示用的源图 canvas（已缩放到可操作尺寸） */
   let pts = [];/* 4 个角点，坐标系 = srcCv 的 CSS 像素 */
@@ -156,28 +176,205 @@
 
   /* ---------- 拉正 ---------- */
 
+  /* Step 19 · 六（关键修复）：强制角点排序。
+     手柄与角点是按下标绑定的，用户把角点拖过界（比如左上角拖到右下）
+     后，下标顺序不再对应「左上→右上→右下→左下」，单应性方程组的
+     点对映射随之错乱，输出就是一坨错位色块 + 斜线。
+     这里在计算 H 之前按几何位置强制排序为 TL → TR → BR → BL：
+     按 y 分组，y 小的两个是上边，上/下边内部再按 x 分左右。 */
+  function orderCorners(points) {
+    const sorted = [...points].sort((a, b) => a[1] - b[1]);
+    const top1 = sorted[0], top2 = sorted[1], bot1 = sorted[2], bot2 = sorted[3];
+    const [tl, tr] = top1[0] < top2[0] ? [top1, top2] : [top2, top1];
+    const [bl, br] = bot1[0] < bot2[0] ? [bot1, bot2] : [bot2, bot1];
+    return [tl, tr, br, bl];
+  }
+
+  /* 任两个角点太近（< 20px）视为重合，禁止拉正 */
+  const MIN_CORNER_DIST = 20;
+  function cornersTooClose(list) {
+    for (let i = 0; i < list.length; i++) {
+      for (let j = i + 1; j < list.length; j++) {
+        if (Math.hypot(list[i][0] - list[j][0], list[i][1] - list[j][1]) < MIN_CORNER_DIST) return true;
+      }
+    }
+    return false;
+  }
+
   /* 目标矩形尺寸：取四条边长度的最大值取整。
-     用 max 而不是平均：拖歪时四边不等长，取最大保证内容不裁掉。 */
-  function targetSize() {
+     用 max 而不是平均：拖歪时四边不等长，取最大保证内容不裁掉。
+     入参为已排序的 TL/TR/BR/BL 角点。 */
+  function targetSize(p) {
     const d = (a, b) => Math.hypot(b[0] - a[0], b[1] - a[1]);
-    const w = Math.max(d(pts[0], pts[1]), d(pts[3], pts[2]));
-    const h = Math.max(d(pts[0], pts[3]), d(pts[1], pts[2]));
+    const w = Math.max(d(p[0], p[1]), d(p[3], p[2]));
+    const h = Math.max(d(p[0], p[3]), d(p[1], p[2]));
     return {
       w: Math.max(8, Math.round(w)),
       h: Math.max(8, Math.round(h))
     };
   }
 
+  /* ---------- 引擎：jscanify（OpenCV.js）动态加载 ---------- */
+
+  let busy = false;
+  let enginePromise = null;
+
+  function msg(e) { return (e && e.message) || String(e || '未知错误'); }
+
+  function stat(t) { const s = $('#dsStat', rootEl); if (s) s.textContent = t; }
+
+  /* vendor/jscanify.min.js = opencv.js + jscanify.js 合并的单文件（约 9MB），
+     只在第一次点「拉正」时加载；LB.router.loadScript 内部缓存 Promise，
+     失败时不缓存（下次点击可重试）。 */
+  function loadEngine() {
+    if (!enginePromise) {
+      enginePromise = LB.router.loadScript('vendor/jscanify.min.js')
+        .then(waitCv)
+        .catch(e => { enginePromise = null; throw e; });
+    }
+    return enginePromise;
+  }
+
+  /* OpenCV.js 是异步初始化（wasm 解码），轮询 cv.Mat 出现即就绪。
+     不用 onRuntimeInitialized 回调：脚本加载完可能已经初始化过了，回调就永远不触发。 */
+  function waitCv() {
+    return new Promise((resolve, reject) => {
+      const t0 = Date.now();
+      const tick = () => {
+        if (window.cv && window.cv.Mat) { resolve(); return; }
+        if (Date.now() - t0 > 30000) { reject(new Error('OpenCV 初始化超时')); return; }
+        setTimeout(tick, 80);
+      };
+      tick();
+    });
+  }
+
+  function showResult(out, label) {
+    if (!alive || !rootEl) return;      /* 引擎回调可能在离开页面后才到 */
+    let enhanced = false;
+    const ctx = out.getContext('2d');
+    /* 白纸增强：直接复用 fix.js 挂在 LB.img 上的实现（不复制算法） */
+    if (typeof LB.img.whiteEnhance === 'function') {
+      try { LB.img.whiteEnhance(ctx, out.width, out.height); enhanced = true; }
+      catch (_) { enhanced = false; }
+    }
+    const box = $('#dsOut', rootEl);
+    box.innerHTML = '';
+    box.appendChild(out);
+    $('#dsOutSec', rootEl).hidden = false;
+    stat('已拉正 ' + out.width + '×' + out.height + ' · ' + label +
+      (enhanced ? ' · 已自动白纸增强' : ' · （白纸增强不可用，未应用）'));
+    LB.toast('拉正完成', 'ok');
+  }
+
+  /* ---------- 拉正（jscanify 主路径 + 自研算法兜底） ---------- */
+
   function warp() {
     const l = layout();
-    if (!l) { LB.toast('请先上传图片', 'err'); return; }
-    const ts = targetSize();
+    /* Step 11 · B3：画布被隐藏时 rect 宽高为 0，kx/ky 会算出 Infinity，
+       整个结果变成空白图且不报错。这里显式拦住。 */
+    if (!l || !l.rect.width || !l.rect.height) { LB.toast('请先上传图片', 'err'); return; }
+    if (!pts.length) { LB.toast('请先上传图片', 'err'); return; }
+    /* Step 19 · 六：两点太近 → 禁止拉正并提示 */
+    if (cornersTooClose(pts)) {
+      LB.toast('四角不能重合，请把太近的角点分开一点', 'err');
+      return;
+    }
+    /* Step 19 · 六：先按几何位置排序成 TL → TR → BR → BL，再参与映射 */
+    const ordered = orderCorners(pts);
+    if (busy) return;
+    busy = true;
+    stat('⏳ 正在准备文档矫正引擎（首次需加载约 9MB，稍等）…');
+    loadEngine().then(() => {
+      if (!alive || !rootEl) return;
+      stat('⏳ 引擎就绪，正在拉正…');
+      /* 让上面的提示先绘制一帧，再跑同步的 OpenCV 计算 */
+      setTimeout(() => {
+        warpJscanify(ordered, l).catch(e => {
+          if (!alive || !rootEl) return;
+          LB.toast('jscanify 拉正失败（' + msg(e) + '），已使用简化模式', 'warn');
+          warpCustom(ordered, l);
+        }).then(() => { busy = false; });
+      }, 40);
+    }).catch(e => {
+      busy = false;
+      if (!alive || !rootEl) return;
+      LB.toast('文档矫正引擎加载失败（' + msg(e) + '），已使用简化模式', 'warn');
+      warpCustom(ordered, l);
+    });
+  }
 
-    /* CSS 像素 → 源图像素 */
-    const src = pts.map(p => [p[0] * l.kx, p[1] * l.ky]);
+  /* jscanify 1.1.0 的 extractPaper 在末尾又做了一次上下翻转（它自己的
+     getPerspectiveTransform 映射 TL→(0,0) 输出本来就是正的），
+     实测：在纸面顶部 4%~10% 处画的标记条出现在结果 90% 高度处 → 结果倒置。
+     这里翻回来，并用相邻像素补掉 warp 边界采样留下的 1~3px 黑边。 */
+  function unflip(canvas) {
+    const W = canvas.width, H = canvas.height;
+    const out = document.createElement('canvas');
+    out.width = W; out.height = H;
+    const ctx = out.getContext('2d');
+    ctx.setTransform(1, 0, 0, -1, 0, H);
+    ctx.drawImage(canvas, 0, 0);
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    const e = Math.max(1, Math.min(3, Math.floor(H / 60)));
+    try {
+      ctx.drawImage(out, 0, e, W, e, 0, 0, W, e);
+      ctx.drawImage(out, 0, H - e * 2, W, e, 0, H - e, W, e);
+    } catch (_) { /* 极端尺寸下补边失败就算了，不影响主结果 */ }
+    return out;
+  }
+
+  /* 用 jscanify 拉正。★ 任务书写的 extractPaper(img, w, h) 直接返回结果，
+     实际 API（v1.1.0）是回调式：extractPaper(image, w, h, onComplete, cornerPoints)，
+     且 cornerPoints 是 { topLeftCorner / topRightCorner / bottomLeftCorner / bottomRightCorner }
+     四个具名点（不是数组），这里按真实签名调用。 */
+  function warpJscanify(orderedCss, l) {
+    const p = orderedCss.map(pt => [pt[0] * l.kx, pt[1] * l.ky]);   /* CSS 像素 → 源图像素 */
+    const d = (a, b) => Math.hypot(b[0] - a[0], b[1] - a[1]);
+    const w = Math.max(d(p[0], p[1]), d(p[3], p[2]));
+    const h = Math.max(d(p[0], p[3]), d(p[1], p[2]));
+    /* 输出上限 2400 边长：与自研路径保持一致，避免超大结果拖垮下载与显示 */
+    const cap = Math.min(1, 2400 / Math.max(w, h));
+    const ow = Math.max(8, Math.round(w * cap));
+    const oh = Math.max(8, Math.round(h * cap));
+    const corners = {
+      topLeftCorner: { x: p[0][0], y: p[0][1] },
+      topRightCorner: { x: p[1][0], y: p[1][1] },
+      bottomRightCorner: { x: p[2][0], y: p[2][1] },
+      bottomLeftCorner: { x: p[3][0], y: p[3][1] }
+    };
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      const done = c => { if (settled) return; settled = true; showResult(c, 'jscanify / OpenCV'); resolve(); };
+      const fail = e => { if (settled) return; settled = true; reject(e); };
+      const timer = setTimeout(() => fail(new Error('引擎处理超时')), 30000);
+      try {
+        new window.jscanify().extractPaper(srcCv, ow, oh, c => {
+          clearTimeout(timer);
+          done(unflip(c));
+        }, corners);
+      } catch (e) {
+        clearTimeout(timer);
+        fail(e);
+      }
+    });
+  }
+
+  /* ---------- 兜底：自研反向映射 + 双线性插值（Step 19 的实现，原样保留） ---------- */
+
+  function warpCustom(orderedCss, l) {
+    const ts = targetSize(orderedCss);
+
+    /* CSS 像素 → 源图像素（顺序与 dst 的 TL/TR/BR/BL 一一对应） */
+    const src = orderedCss.map(p => [p[0] * l.kx, p[1] * l.ky]);
     const dst = [[0, 0], [ts.w, 0], [ts.w, ts.h], [0, ts.h]];
 
-    const H = getPerspectiveTransform(src, dst);
+    /* Step 19 · 六（关键修复 2）：像素循环做的是「目标 → 源」反向映射，
+       所以这里必须求 dst → src 的单应性矩阵（getPerspectiveTransform
+       解出的方向是第一个参数 → 第二个参数）。旧代码把 src → dst 的
+       矩阵直接当反向映射用，采样点整体坍缩到源图左上角，
+       输出就是用户截图里"一坨错位色块 + 斜线"。 */
+    const H = getPerspectiveTransform(dst, src);
     if (!H) {
       LB.toast('四角不能共线或重合，请把四个角分开摆好', 'err');
       return;
@@ -227,21 +424,7 @@
       }
     }
     octx.putImageData(imgData, 0, 0);
-
-    /* 白纸增强：直接复用 fix.js 挂在 LB.img 上的实现（不复制算法） */
-    let enhanced = false;
-    if (typeof LB.img.whiteEnhance === 'function') {
-      try { LB.img.whiteEnhance(octx, ow, oh); enhanced = true; }
-      catch (_) { enhanced = false; }
-    }
-
-    const box = $('#dsOut', rootEl);
-    box.innerHTML = '';
-    box.appendChild(out);
-    $('#dsOutSec', rootEl).hidden = false;
-    $('#dsStat', rootEl).textContent =
-      '已拉正 ' + ow + '×' + oh + (enhanced ? ' · 已自动白纸增强' : ' · （白纸增强不可用，未应用）');
-    LB.toast('拉正完成', 'ok');
+    showResult(out, '简化模式（自研反向映射）');
   }
 
   function save() {
@@ -252,8 +435,16 @@
       .catch(() => LB.toast('导出失败', 'err'));
   }
 
-  function reset() {
+  function reset(tries) {
+    if (!srcCv) return;
     const w = srcCv.clientWidth, h = srcCv.clientHeight;
+    /* Step 11 · B3：容器刚由 hidden 变可见时，布局尚未回流，clientWidth 会是 0。
+       此时算出来的四个角全在原点（四角重合），点「拉正」只会报"四角不能共线"。
+       这里等下一帧重试，最多 5 次，彻底避免这个竞态。 */
+    if ((!w || !h) && (tries || 0) < 5) {
+      requestAnimationFrame(() => reset((tries || 0) + 1));
+      return;
+    }
     /* 默认取画布四角内缩 6%，比死贴四角更符合「先微调再精调」的手感 */
     const ix = w * 0.06, iy = h * 0.06;
     pts = [[ix, iy], [w - ix, iy], [w - ix, h - iy], [ix, h - iy]];
@@ -268,24 +459,39 @@
     let el;
     try { el = await LB.img.load(f); }
     catch (e) { LB.toast(e.message || '图片解码失败', 'err'); return; }
-    img = el;
+
+    /* Step 11 · B3：naturalWidth/Height 才是原图尺寸。
+       用 el.width 在某些浏览器上拿到的是 HTML 属性（可能缺失）→ 得到 0×0 的画布，
+       drawImage 后什么都画不出来，这正是"图片不显示"的另一种表现。 */
     const nw = el.naturalWidth || el.width;
     const nh = el.naturalHeight || el.height;
+    if (!nw || !nh) { LB.toast('图片尺寸无效，请换一张', 'err'); return; }
+
+    img = el;
     const sz = LB.img.fitSize(nw, nh, MAX_SIDE);
+
+    /* ★ canvas 尺寸必须用 width/height **属性**设置，不能用 CSS：
+       CSS 只负责把它等比缩到容器里，属性才决定真实像素与 drawImage 的坐标系。
+       （CSS 侧只保留 .ds-canvas-wrap canvas 的 max-width:100%，不写死宽高） */
     srcCv = document.createElement('canvas');
-    srcCv.width = sz.w; srcCv.height = sz.h;
+    srcCv.width = sz.w;
+    srcCv.height = sz.h;
+    srcCv.className = 'ds-src';
     const ctx = srcCv.getContext('2d');
     ctx.imageSmoothingQuality = 'high';
+    /* drawImage 传 4 个参数（dx, dy, dw, dh），把源图铺满整块 canvas */
     ctx.drawImage(el, 0, 0, sz.w, sz.h);
 
     const wrap = $('#dsWrap', rootEl);
     wrap.innerHTML = '';
     wrap.appendChild(srcCv);
+
+    /* 覆盖层与四角手柄都必须在源图 canvas **就位之后**再创建：
+       顺序反了手柄会按旧坐标系定位，出现"手柄和图片对不上"。 */
     const ov = document.createElement('canvas');
     ov.id = 'dsOverlay';
     ov.className = 'ds-overlay';
     wrap.appendChild(ov);
-    /* 手柄：4 个 div，absolute 定位在 wrap 内 */
     handles = [];
     for (let i = 0; i < 4; i++) {
       const hEl = document.createElement('div');
@@ -297,10 +503,13 @@
       wrap.appendChild(hEl);
       handles.push(hEl);
     }
+
     $('#dsPick', rootEl).hidden = true;
     $('#dsWork', rootEl).hidden = false;
-    /* 等布局完成（CSS max-width 生效后 clientWidth 才是真实值）再放点 */
-    requestAnimationFrame(() => { reset(); });
+
+    /* 等布局完成（CSS max-width 生效、容器脱离 hidden）再放点；
+       reset() 内部还会对 clientWidth=0 的竞态做二次重试。 */
+    requestAnimationFrame(() => reset(0));
   }
 
   function reselect() {
@@ -340,7 +549,8 @@
       '</div>' +
       '</div>' +
       '</div>' +
-      '<p class="cd-note">全部在本地完成，照片不会上传。双线性插值 + 反向映射保证放大不出现马赛克；' +
+      '<p class="cd-note">全部在本地完成，照片不会上传。拉正由 jscanify（底层 OpenCV.js，wasm 本地执行）' +
+      '做透视变换，白纸增强自动跟上；引擎首次使用需加载约 9MB，加载失败会自动改用内置的简化算法，功能不断档。' +
       '输出边长上限 2400 像素，超大图会等比缩小以免浏览器长时间无响应。</p>' +
       '</div>'
     );
@@ -348,6 +558,7 @@
 
   function mount(root) {
     rootEl = root;
+    alive = true;
     root.innerHTML = html();
     img = null; srcCv = null; pts = []; handles = []; dragIdx = -1;
 
@@ -361,7 +572,7 @@
     window.addEventListener('pointercancel', onUp);
 
     $('#dsGo', root).addEventListener('click', warp);
-    $('#dsReset', root).addEventListener('click', e => LB.confirm(e.currentTarget, reset));
+    $('#dsReset', root).addEventListener('click', e => LB.confirm(e.currentTarget, () => reset(0)));
     $('#dsRe', root).addEventListener('click', reselect);
     $('#dsSave', root).addEventListener('click', save);
     root.addEventListener('click', e => {
@@ -370,12 +581,14 @@
   }
 
   function unmount() {
+    alive = false;
     /* 必须解window 监听 —— 否则离开页面后pointermove 仍在跑，
        onMove 里访问 rootEl 会报错，且 4 个手柄的 DOM 已被移除。 */
     window.removeEventListener('pointermove', onMove);
     window.removeEventListener('pointerup', onUp);
     window.removeEventListener('pointercancel', onUp);
     img = null; srcCv = null; pts = []; handles = []; dragIdx = -1;
+    busy = false;                       /* 引擎 Promise 保留缓存，下次进来不用重下 9MB */
     pasteCleanups.forEach(fn => fn()); pasteCleanups = [];
     rootEl = null;
   }

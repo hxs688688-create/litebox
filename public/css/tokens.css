@@ -10,7 +10,13 @@
   --fg:#1a2233; --fg2:#616c85; --fg3:#6b7488;
   /* 品牌（Step 8 对比度：白字 4.17:1 → 5.39:1 / 3.91:1 → 5.70:1，≥4.5:1） */
   --brand1:#4a5ae6; --brand2:#7c3aed;
+  /* Step 12 · 首页 hero 标题三段渐变（第三段是任务书给的 #e05cff）。
+     按红线「tokens.css 之外不得出现硬编码颜色」，收口到这里。 */
+  --brand3:#e05cff;
   --brand-grad:linear-gradient(120deg,var(--brand1),var(--brand2));
+  --brand-grad-3:linear-gradient(120deg,var(--brand1) 0%,var(--brand2) 60%,var(--brand3) 100%);
+  /* Step 12 · 徽章投影（比 --shadow-sm 更轻，仅用于 hero 徽章） */
+  --badge-shadow:0 1px 3px rgba(0,0,0,.04);
   /* 语义（Step 8 对比度：--ok 3.38:1 → 4.63:1；--warn 2.19:1 → 5.17:1） */
   --ok:#12864a; --warn:#96621a; --err:#d03050;
   /* 圆角 */
@@ -26,6 +32,12 @@
   /* 尺寸 */
   --head-h:60px; --nav-h:54px;
   --safe-bottom:env(safe-area-inset-bottom,0px);
+  /* Step 21 · 三：导航条与弹层的层叠关系集中在这里算，layout.css 只引用变量。
+     弹层底边 = 导航条顶边 + 8px 间隙（导航条浮在遮罩之上，不需要额外补偿）。 */
+  --tabbar-h:64px;
+  --tabbar-bottom:calc(8px + var(--safe-bottom));
+  --sheet-gap:8px;
+  --sheet-bottom:calc(var(--tabbar-h) + var(--tabbar-bottom) + var(--sheet-gap));
 
   /* —— Step 10 · 间距梯度（4px 基网格，全站 gap/padding/margin 收敛到此） —— */
   --sp-1:4px;
@@ -68,6 +80,9 @@
   --shadow-inset:inset 0 1px 0 rgba(255,255,255,.55);
   /* 弹层遮罩 */
   --mask-bg:rgba(8,12,24,.42);
+  /* Step 21 · 三：导航条浮在遮罩之上，所以遮罩要更淡一档（.42 → .28），
+     否则底部导航条被压在一块黑斑里。 */
+  --mask-bg-soft:rgba(10,14,25,.28);
   /* 弹层上浮投影 */
   --sheet-shadow:0 -8px 60px rgba(18,28,58,.2);
   /* 弹层底色
@@ -123,6 +138,8 @@
   --qr-fg:#111111;
   /* QR 画布底色（扫码规范要求浅底） */
   --qr-bg:#ffffff;
+  /* Step 14 · QR 中心 Logo 的白色圆角底（canvas 绘制色，与主题无关） */
+  --qr-logo-bg:#ffffff;
   /* 文本对比：新增行底色 */
   --diff-add-bg:rgba(34,197,94,.13);
   /* 文本对比：删除行底色 */
@@ -172,6 +189,41 @@
   --die-shine:rgba(255,255,255,.9);
   --die-shadow:rgba(34,44,70,.14);
 
+  /* —— Step 12 摇骰子骰盅（物理道具语义色：深色骰盅，与主题无关，深浅主题同值） —— */
+  /* 盅身渐变起止（上亮下暗，模拟 3D 圆柱） */
+  --cup-hi:#6a7591;
+  --cup-lo:#2b3245;
+  /* 盅口椭圆（倒扣杯的下缘） */
+  --cup-rim-hi:#8b95ae;
+  --cup-rim-lo:#3c4359;
+  /* 盅身侧面暗部 / 盅口内侧阴影 */
+  --cup-shade:rgba(0,0,0,.42);
+  --cup-inner:rgba(0,0,0,.6);
+  /* 骰盅落影 */
+  --cup-shadow:rgba(12,18,34,.32);
+
+  /* —— Step 13 · B6 摇骰子（骰盅 + 蓝色圆托盘 + 白底蓝点骰子） ——
+     任务书直接给了这些色值，属于物理道具语义色（与主题无关，深浅主题同值），
+     按红线「仅 tokens.css 可硬编码」收口到这里。 */
+  /* 盅身渐变（上亮下暗，模拟 3D 圆柱） */
+  /* 托盘（蓝色圆盘）：盘面渐变 + 盘沿 + 盘心凹陷 + 落影
+     （Step 18：--dc-tray-lo/--dc-tray-rim 同时供 three.js 3D 材质读取） */
+  --dc-tray-hi:#5a8fd6;
+  --dc-tray-lo:#2b5fa8;
+  --dc-tray-edge:#1d4a86;
+  --dc-tray-rim:#8fb8e8;
+  --dc-tray-well:rgba(10,26,52,.42);
+  --dc-tray-shadow:rgba(12,24,48,.28);
+  /* 骰子：白瓷面 + 蓝色点（任务书「白色底 + 蓝色圆点」） */
+  --dc-die-face-a:#ffffff;
+  --dc-die-face-b:#e6ecf7;
+  --dc-die-pip:#1a2a5a;
+  --dc-die-edge:rgba(44,56,88,.16);
+  --dc-die-shine:rgba(255,255,255,.92);
+  --dc-die-shadow:rgba(24,40,78,.22);
+  /* 骰子在盘面上的高光晕 */
+  --dc-die-glow:rgba(90,143,214,.16);
+
   /* —— Step 5D 元素周期表分类（化学语义色：元素分类的可视化标识，与主题无关，深浅主题同值；自 tools.css 硬编码迁移以满足"仅 tokens 可硬编码"红线） —— */
   --pt-alkali:#ef4444;       /* 碱金属 */
   --pt-alkaline:#f97316;     /* 碱土金属 */
@@ -199,6 +251,38 @@
   --stage-gold:#ffd43b;
   /* 图片上的半透明黑遮罩（GIF 帧角标等，同 --wp-mask 数值） */
   --img-scrim:rgba(0,0,0,.62);
+
+  /* —— Step 20 · A2 手持弹幕 9 配色（灯牌语义色：深浅主题恒定，
+     自定义方案由颜色选择器覆盖 --dm-bg/--dm-fg 两个活动变量） —— */
+  --dm-bg-classic:#000000; --dm-fg-classic:#ffffff;   /* 经典（黑底白字） */
+  --dm-bg-invert:#ffffff;  --dm-fg-invert:#111111;    /* 反白（白底黑字） */
+  --dm-bg-green:#000000;   --dm-fg-green:#39ff14;     /* 荧光绿（黑底绿字） */
+  --dm-bg-pink:#000000;    --dm-fg-pink:#ff4fd8;      /* 霓虹粉（黑底粉字） */
+  --dm-bg-ice:#000000;     --dm-fg-ice:#5ad7ff;       /* 冰蓝（黑底蓝字） */
+  --dm-bg-yellow:#000000;  --dm-fg-yellow:#ffd60a;    /* 亮黄（黑底黄字） */
+  --dm-bg-redgold:#c8102e; --dm-fg-redgold:#ffd700;   /* 红金（红底金字） */
+  --dm-bg-sea:#0b2545;     --dm-fg-sea:#ffffff;       /* 海蓝（深蓝底白字） */
+  /* 自定义（颜色选择器写入这两个活动变量） */
+  --dm-bg:#000000;
+  --dm-fg:#ffffff;
+
+  /* —— Step 16 · B1 小说阅读器（阅读背景是业务数据色：用户可选纸张色，深浅主题恒定） —— */
+  /* 纸白 / 米黄 / 护眼绿 / 夜间黑 四种阅读底色 */
+  --rd-paper:#ffffff;
+  --rd-sepia:#f5ecd9;
+  --rd-green:#cce8cf;
+  --rd-night:#15181d;
+  /* 前三种底色上的正文墨色（浅底深字） */
+  --rd-ink:#22262e;
+  /* 夜间底色上的正文色（深底浅字） */
+  --rd-ink-night:#b8bfcc;
+
+  /* —— Step 17 · A2 经期记录日历状态色（生理周期语义色：任务书指定
+     经期深红 / 排卵日橙红 / 易孕黄 / 安全浅绿，与主题无关，深浅主题同值） —— */
+  --pd-period:#d64545;   /* 经期日 深红 */
+  --pd-ovu:#e8590c;      /* 排卵日 橙红 */
+  --pd-fertile:#d9a514;  /* 易孕期 黄 */
+  --pd-safe:#2f9e44;     /* 安全期 浅绿 */
 }
 [data-theme="dark"]{
   --bg:#0e1118; --card:#161a24; --card2:#1b2030;
@@ -215,5 +299,6 @@
   --glow2:rgba(124,58,237,.11);
   --shadow-inset:inset 0 1px 0 rgba(255,255,255,.10);
   --mask-bg:rgba(0,0,0,.52);
+  --mask-bg-soft:rgba(0,0,0,.34);
   --sheet-shadow:0 -8px 60px rgba(0,0,0,.5);
 }

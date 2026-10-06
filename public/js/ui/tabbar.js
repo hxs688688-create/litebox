@@ -17,11 +17,16 @@
 
       btns.forEach(b => b.addEventListener('click', () => {
         const t = b.dataset.tab;
+        /* Step 21 · 三：导航条现在浮在弹层遮罩之上，点首页 / 搜索 / 收藏时得主动
+           把弹层沉下去（Step 13 时期弹层一开导航条就被隐藏，点不到，不需要这行）。 */
+        if (t !== 'cat' && t !== 'me') LB.ui.sheet.close();
         if (t === 'home') {
           LB.hash.go('home');
         } else if (t === 'cat') {
           this.renderCatGrid();
-          LB.ui.sheet.open('catSheet');
+          /* Step 22 · 五：再点一次「分类」= 收起弹层（toggle） */
+          if (LB.ui.sheet.isOpen('catSheet')) LB.ui.sheet.close();
+          else LB.ui.sheet.open('catSheet');
         } else if (t === 'search') {
           LB.hash.go('home');
           setTimeout(() => {
@@ -33,7 +38,9 @@
           setTimeout(() => LB.ui.home.goFav(), 80);
         } else if (t === 'me') {
           this.renderMePanel();
-          LB.ui.sheet.open('meSheet');
+          /* Step 22 · 五：再点一次「我的」= 收起弹层（toggle） */
+          if (LB.ui.sheet.isOpen('meSheet')) LB.ui.sheet.close();
+          else LB.ui.sheet.open('meSheet');
         }
       }));
 

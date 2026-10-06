@@ -1,256 +1,236 @@
-/* LiteBox v5 · tools/imgstyle.js — 图片风格化（素描 / 漫画 / 复古 / 黑白）
-   全部用 Canvas 逐像素滤镜纯本地实现，图片不上传。
-   ★ 素描是 O(W×H×9) 的 Sobel 边缘检测，大图会明显卡顿，
-     故统一把最长边缩到 MAX_SIDE(1200) 再处理。 */
+/* LiteBox v5 · tools/imgstyle.js — 图片风格化
+   Step 14：改用 image-to-toon（npm，零依赖，纯浏览器 Canvas，不调 API、无频率限制）。
+   引擎按需从 vendor/image-to-toon.js 加载，首次进入工具才拉取，避免拖慢首页。 */
 (function () {
   'use strict';
 
   const { $, $$ } = LB.dom;
 
-  const MAX_SIDE = 1200;   /* 最长边上限（px） */
   const MAX_MB = 12;
+  const MAX_SIDE = 1280;   /* 引擎内部最长边上限，控制处理耗时 */
   const EXT_OK = ['jpg', 'jpeg', 'png', 'webp', 'bmp', 'gif'];
-  const FONT = '"PingFang SC","Microsoft YaHei",system-ui,sans-serif';
+  const VENDOR_SRC = 'vendor/image-to-toon.js';
 
-  const MODES = [
-    { v: 'orig', n: '原图' },
-    { v: 'sketch', n: '素描' },
+  /* 6 种风格：前 4 个是引擎的 style，后 2 个是引擎的调优预设（applyPreset 名称一致） */
+  const STYLES = [
+    { v: 'cartoon', n: '卡通' },
     { v: 'comic', n: '漫画' },
-    { v: 'vintage', n: '复古' },
-    { v: 'gray', n: '黑白' }
+    { v: 'painting', n: '油画' },
+    { v: 'sketch', n: '素描' },
+    { v: 'pencil', n: '铅笔' },
+    { v: 'portrait', n: '人像' }
   ];
 
+  const EDGE_OFFSET = 0.5;   /* 引擎 edgeStrength 取值 0~1，UI 用 0.5~1.5 展示 */
+
   let rootEl = null;
-  let srcImg = null;      /* 原始 HTMLImageElement */
-  let srcURL = '';         /* objectURL，切走时 revoke */
-  let baseCv = null;       /* 缩放后的基准画布（所有滤镜的输入） */
-  let outCv = null;        /* 当前输出画布 */
-  let mode = 'orig';
+  let engine = null;
+  let unsub = null;
+  let curFile = null;        /* 当前选中的文件 */
+  let loadedFile = null;     /* 已 load 进引擎的文件（避免每次切风格都重新解码） */
+  let style = 'cartoon';
+  let params = { edge: 1.0, levels: 6, smooth: 3 };
   let onPaste = null;
-  let busy = false;
+  let seq = 0;
+  let debounce = 0;
+
+  const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 
   function extOk(name) {
     const i = name.lastIndexOf('.');
     return i >= 0 && EXT_OK.indexOf(name.slice(i + 1).toLowerCase()) >= 0;
   }
 
+  function nameOf(v) {
+    const s = STYLES.find(x => x.v === v);
+    return s ? s.n : v;
+  }
+
+  function toMsg(e) {
+    const code = e && e.code;
+    if (code === 'FILE_TOO_LARGE') return '图片过大，请选择 ' + MAX_MB + 'MB 以内的图片';
+    if (code === 'UNSUPPORTED_TYPE') return '不支持的图片格式，请换 JPG / PNG / WEBP';
+    if (code === 'DIMENSION_EXCEEDED') return '图片尺寸过大，请先压缩后再试';
+    if (code === 'DECODE_FAILED') return '图片解码失败，请换一张试试';
+    return '处理失败：' + ((e && e.message) || '未知错误');
+  }
+
+  /* 引擎脚本按需加载；window.CaricatureEngine 为正式名，CarricatureEngine 为拼写别名 */
+  function EngineCtor() {
+    return window.CaricatureEngine || window.CarricatureEngine;
+  }
+
+  function loadToonEngine() {
+    if (EngineCtor()) return Promise.resolve();
+    if (!window.__lbToonPromise) {
+      window.__lbToonPromise = new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = VENDOR_SRC;
+        s.onload = resolve;
+        s.onerror = () => {
+          window.__lbToonPromise = null;
+          reject(new Error('风格化组件加载失败'));
+        };
+        document.head.appendChild(s);
+      });
+    }
+    return window.__lbToonPromise;
+  }
+
+  async function ensureEngine() {
+    await loadToonEngine();
+    const Ctor = EngineCtor();
+    if (!Ctor) throw new Error('风格化组件加载失败');
+    if (!engine) {
+      engine = new Ctor({ config: { mode: 'color', posterizeLevels: params.levels, maxDimension: MAX_SIDE } });
+      engine.setValidation({
+        maxSizeBytes: MAX_MB * 1048576,
+        acceptedTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/bmp', 'image/x-ms-bmp', 'image/gif'],
+        maxSourceDimension: 0
+      });
+      unsub = engine.subscribe(st => {
+        if (!rootEl || st.status !== 'processing') return;
+        $('#isStat', rootEl).textContent = '处理中… ' + Math.round((st.progress || 0) * 100) + '%';
+      });
+    }
+    return engine;
+  }
+
+  function setBusy(on) {
+    const btn = $('#isDl', rootEl);
+    const pick = $('#isPick', rootEl);
+    btn.disabled = on;
+    pick.disabled = on;
+    btn.textContent = on ? '⏳ 处理中…' : '⬇️ 下载图片';
+  }
+
+  function syncSliders() {
+    $('#isEdge', rootEl).value = String(params.edge);
+    $('#isEdgeV', rootEl).textContent = params.edge.toFixed(2);
+    $('#isLevels', rootEl).value = String(params.levels);
+    $('#isLevelsV', rootEl).textContent = String(params.levels);
+    $('#isSmooth', rootEl).value = String(params.smooth);
+    $('#isSmoothV', rootEl).textContent = String(params.smooth);
+  }
+
+  function pushParams() {
+    if (!engine) return;
+    engine.updateConfig({
+      edgeStrength: clamp(params.edge - EDGE_OFFSET, 0, 1),
+      posterizeLevels: params.levels,
+      smoothness: params.smooth
+    });
+  }
+
+  /* 切风格：套用同名预设，并把滑杆同步成预设的实际取值（用户再拖才覆盖） */
+  function applyStyle() {
+    if (!engine) return;
+    engine.applyPreset(style);
+    const c = engine.getConfig();
+    params.edge = clamp(c.edgeStrength + EDGE_OFFSET, 0.5, 1.5);
+    params.levels = clamp(c.posterizeLevels, 4, 8);
+    params.smooth = clamp(c.smoothness, 1, 10);
+    syncSliders();
+    pushParams();
+  }
+
+  async function render() {
+    if (!curFile) return;
+    const my = ++seq;
+    setBusy(true);
+    try {
+      await ensureEngine();
+      if (my !== seq) return;
+      if (loadedFile !== curFile) {
+        await engine.load(curFile);
+        loadedFile = curFile;
+      }
+      if (my !== seq) return;
+      const res = await engine.process();
+      if (my !== seq) return;
+      const cvEl = $('#isCanvas', rootEl);
+      cvEl.width = res.width;
+      cvEl.height = res.height;
+      cvEl.getContext('2d').drawImage(res.canvas, 0, 0);
+      $('#isBox', rootEl).hidden = false;
+      $('#isEmpty', rootEl).hidden = true;
+      $('#isStat', rootEl).textContent =
+        nameOf(style) + ' · ' + res.width + ' × ' + res.height +
+        ' · ' + Math.round(res.durationMs || 0) + 'ms';
+    } catch (e) {
+      if (my !== seq) return;
+      LB.toast(toMsg(e), 'err');
+      $('#isStat', rootEl).textContent = '';
+    } finally {
+      if (my === seq) setBusy(false);
+    }
+  }
+
+  function scheduleRender(delay) {
+    if (debounce) clearTimeout(debounce);
+    debounce = setTimeout(() => { debounce = 0; render(); }, delay == null ? 220 : delay);
+  }
+
+  /* 先确保引擎就绪 → 套用当前风格预设（并同步滑杆）→ 出图 */
+  async function applyAndRender() {
+    if (!curFile) return;
+    try {
+      await ensureEngine();
+    } catch (e) {
+      LB.toast(toMsg(e), 'err');
+      return;
+    }
+    applyStyle();
+    render();
+  }
+
   function pickFile(file) {
     if (!rootEl || !file) return;
     const okType = (file.type && file.type.indexOf('image/') === 0) || extOk(file.name || '');
     if (!okType) { LB.toast('请选择图片文件（JPG / PNG / WEBP 等）', 'err'); return; }
-    if (file.size > MAX_MB * 1048576) { LB.toast('图片过大：请选择 ' + MAX_MB + 'MB 以以内的图片', 'info'); return; }
-    if (srcURL) { try { URL.revokeObjectURL(srcURL); } catch (_) {} }
-    srcURL = URL.createObjectURL(file);
-    const img = new Image();
-    img.onload = () => {
-      srcImg = img;
-      prepareBase();
-      render();
-      LB.toast('图片已载入', 'ok');
-    };
-    img.onerror = () => LB.toast('图片解码失败，请换一张试试', 'err');
-    img.src = srcURL;
-  }
+    if (file.size > MAX_MB * 1048576) { LB.toast('图片过大：请选择 ' + MAX_MB + 'MB 以内的图片', 'info'); return; }
 
-  /* 等比缩放到最长边 ≤ MAX_SIDE，作为滤镜输入 */
-  function prepareBase() {
-    if (!srcImg) return;
-    const w = srcImg.naturalWidth || srcImg.width;
-    const h = srcImg.naturalHeight || srcImg.height;
-    const scale = Math.min(1, MAX_SIDE / Math.max(w, h));
-    const bw = Math.max(1, Math.round(w * scale));
-    const bh = Math.max(1, Math.round(h * scale));
-    baseCv = document.createElement('canvas');
-    baseCv.width = bw; baseCv.height = bh;
-    const c = baseCv.getContext('2d', { willReadFrequently: true });
-    c.drawImage(srcImg, 0, 0, bw, bh);
-    outCv = document.createElement('canvas');
-    outCv.width = bw; outCv.height = bh;
-    $('#isSize', rootEl).textContent = w + ' × ' + h + (scale < 1 ? ' → 已缩放至 ' + bw + ' × ' + bh : '');
-  }
-
-  function grayAt(d, i) {
-    /* Rec.601 亮度 */
-    return d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114;
-  }
-
-  /* 素描：Sobel 九宫格边缘检测 → 反色成白底黑线 */
-  function sketch(cv) {
-    const w = cv.width, h = cv.height;
-    const c = cv.getContext('2d', { willReadFrequently: true });
-    const img = c.getImageData(0, 0, w, h);
-    const src = img.data;
-    /* 先取灰度副本 */
-    const g = new Float32Array(w * h);
-    for (let p = 0, q = 0; q < w * h; q++, p += 4) g[q] = grayAt(src, p);
-
-    const out = img.data;
-    /* 首末行/列置白，避免取不到邻域产生黑边 */
-    const edge = new Float32Array(w * h);
-    for (let y = 1; y < h - 1; y++) {
-      for (let x = 1; x < w - 1; x++) {
-        const i = y * w + x;
-        const tl = g[i - w - 1], t = g[i - w], tr = g[i - w + 1];
-        const l = g[i - 1], r = g[i + 1];
-        const bl = g[i + w - 1], b = g[i + w], br = g[i + w + 1];
-        const gx = (tr + 2 * r + br) - (tl + 2 * l + bl);
-        const gy = (bl + 2 * b + br) - (tl + 2 * t + tr);
-        edge[i] = Math.sqrt(gx * gx + gy * gy);
-      }
-    }
-    for (let y = 0; y < h; y++) {
-      for (let x = 0; x < w; x++) {
-        const p = (y * w + x) * 4;
-        let v;
-        if (x === 0 || y === 0 || x === w - 1 || y === h - 1) v = 255;
-        else {
-          const e = edge[y * w + x];
-          /* 归一化 + 反色：边缘越强越黑 */
-          const norm = Math.min(1, e / 220);
-          v = 255 - Math.round(norm * 255);
-          /* 保留一点原图明暗，避免纯线稿丢失体积感 */
-          v = Math.max(0, Math.min(255, Math.round(v * 0.82 + grayAt(src, p) * 0.18)));
-        }
-        out[p] = v; out[p + 1] = v; out[p + 2] = v; out[p + 3] = 255;
-      }
-    }
-    c.putImageData(img, 0, 0);
-  }
-
-  /* 漫画：色调量化（每通道 4 档）+ 亮度差 > 阈值处描黑边 */
-  function comic(cv) {
-    const w = cv.width, h = cv.height;
-    const c = cv.getContext('2d', { willReadFrequently: true });
-    const img = c.getImageData(0, 0, w, h);
-    const d = img.data;
-    const Q = 64;                       /* 4 档：0/64/128/192 → 补 255 共 5 档 */
-    const EDGE = 40;                    /* 亮度差阈值 */
-    for (let y = 0; y < h; y++) {
-      for (let x = 0; x < w; x++) {
-        const p = (y * w + x) * 4;
-        let r = d[p], g = d[p + 1], b = d[p + 2];
-        const lum = r * 0.299 + g * 0.587 + b * 0.114;
-        /* 与右邻、下邻比较，差异大 → 描边 */
-        let edge = false;
-        if (x + 1 < w) {
-          const q = p + 4;
-          const nl = d[q] * 0.299 + d[q + 1] * 0.587 + d[q + 2] * 0.114;
-          if (Math.abs(lum - nl) > EDGE) edge = true;
-        }
-        if (!edge && y + 1 < h) {
-          const q = p + w * 4;
-          const nd = d[q] * 0.299 + d[q + 1] * 0.587 + d[q + 2] * 0.114;
-          if (Math.abs(lum - nd) > EDGE) edge = true;
-        }
-        if (edge) {
-          d[p] = 20; d[p + 1] = 20; d[p + 2] = 20;
-        } else {
-          d[p] = Math.min(255, Math.round(r / Q) * Q);
-          d[p + 1] = Math.min(255, Math.round(g / Q) * Q);
-          d[p + 2] = Math.min(255, Math.round(b / Q) * Q);
-        }
-        d[p + 3] = 255;
-      }
-    }
-    c.putImageData(img, 0, 0);
-  }
-
-  /* 复古：棕褐色调（sepia 矩阵）+ 轻微提亮 */
-  function vintage(cv) {
-    const w = cv.width, h = cv.height;
-    const c = cv.getContext('2d', { willReadFrequently: true });
-    const img = c.getImageData(0, 0, w, h);
-    const d = img.data;
-    for (let p = 0; p < d.length; p += 4) {
-      const r = d[p], g = d[p + 1], b = d[p + 2];
-      d[p] = Math.min(255, r * 0.393 + g * 0.769 + b * 0.189);
-      d[p + 1] = Math.min(255, r * 0.349 + g * 0.686 + b * 0.168);
-      d[p + 2] = Math.min(255, r * 0.272 + g * 0.534 + b * 0.131);
-    }
-    c.putImageData(img, 0, 0);
-  }
-
-  /* 黑白：Rec.601 灰度 */
-  function gray(cv) {
-    const w = cv.width, h = cv.height;
-    const c = cv.getContext('2d', { willReadFrequently: true });
-    const img = c.getImageData(0, 0, w, h);
-    const d = img.data;
-    for (let p = 0; p < d.length; p += 4) {
-      const v = Math.round(d[p] * 0.299 + d[p + 1] * 0.587 + d[p + 2] * 0.114);
-      d[p] = v; d[p + 1] = v; d[p + 2] = v;
-    }
-    c.putImageData(img, 0, 0);
-  }
-
-  function setMode(v) {
-    mode = v;
-    render();
-  }
-
-  /* 应用当前滤镜到 outCv，并绘制到预览 */
-  function render() {
-    if (!baseCv) return;
-    const btn = $('#isDl', rootEl);
-    btn.disabled = true;
-    btn.textContent = '⏳ 处理中…';
-    /* 让按钮先进入 loading 态再跑同步滤镜（大图会阻塞主线程） */
-    setTimeout(() => {
-      try {
-        const oc = outCv.getContext('2d', { willReadFrequently: true });
-        oc.clearRect(0, 0, outCv.width, outCv.height);
-        oc.drawImage(baseCv, 0, 0);
-        if (mode === 'sketch') sketch(outCv);
-        else if (mode === 'comic') comic(outCv);
-        else if (mode === 'vintage') vintage(outCv);
-        else if (mode === 'gray') gray(outCv);
-        const cvEl = $('#isCanvas', rootEl);
-        cvEl.width = outCv.width; cvEl.height = outCv.height;
-        cvEl.getContext('2d').drawImage(outCv, 0, 0);
-        $('#isBox', rootEl).hidden = false;
-        $('#isEmpty', rootEl).hidden = true;
-        btn.disabled = false;
-        btn.textContent = '⬇️ 下载图片';
-        $('#isStat', rootEl).textContent = (MODES.find(m => m.v === mode) || {}).n +
-          ' · ' + outCv.width + ' × ' + outCv.height;
-      } catch (e) {
-        btn.disabled = false;
-        btn.textContent = '⬇️ 下载图片';
-        LB.toast('处理失败：' + (e && e.message ? e.message : '未知错误'), 'err');
-      }
-    }, 16);
-  }
-
-  function download() {
-    if (!outCv) { LB.toast('还没有可下载的结果', 'info'); return; }
-    const name = 'imgstyle-' + mode + '-' + outCv.width + 'x' + outCv.height + '.png';
-    outCv.toBlob(b => {
-      if (!b) { LB.toast('导出失败，请重试', 'err'); return; }
-      const href = URL.createObjectURL(b);
-      const a = document.createElement('a');
-      a.href = href; a.download = name;
-      document.body.appendChild(a); a.click(); a.remove();
-      setTimeout(() => URL.revokeObjectURL(href), 1000);
-    }, 'image/png');
+    curFile = file;
+    $('#isFname', rootEl).textContent = file.name || '已选择图片';
+    $('#isFsize', rootEl).textContent = (file.type || 'image') + ' · ' + LB.img.fmtSize(file.size);
+    /* 新图 → 复位到默认风格与参数，避免上一张的调参影响这一张 */
+    style = 'cartoon';
+    $$('#isModes .seg-btn', rootEl).forEach(x => x.classList.toggle('on', x.getAttribute('data-v') === style));
+    params = { edge: 1.0, levels: 6, smooth: 3 };
+    syncSliders();
+    $('#isBox', rootEl).hidden = true;
+    $('#isEmpty', rootEl).hidden = false;
+    $('#isStat', rootEl).textContent = '';
+    applyAndRender();
   }
 
   function clearAll() {
-    if (srcURL) { try { URL.revokeObjectURL(srcURL); } catch (_) {} srcURL = ''; }
-    srcImg = null; baseCv = null; outCv = null;
+    curFile = null;
+    loadedFile = null;
+    seq++;
+    if (debounce) { clearTimeout(debounce); debounce = 0; }
+    if (engine) { try { engine.reset({ keepConfig: true }); } catch (_) {} }
     $('#isBox', rootEl).hidden = true;
     $('#isEmpty', rootEl).hidden = false;
     $('#isSize', rootEl).textContent = '';
     $('#isStat', rootEl).textContent = '';
-    $('#isDl', rootEl).disabled = true;
     $('#isFname', rootEl).textContent = '点击选择图片，或直接粘贴截图';
     $('#isFsize', rootEl).textContent = '';
+    $('#isDl', rootEl).disabled = true;
+  }
+
+  function download() {
+    if (!engine || !curFile) { LB.toast('还没有可下载的结果', 'info'); return; }
+    engine.getBlob({ format: 'png' })
+      .then(b => LB.img.download(b, 'imgstyle-' + style + '.png'))
+      .catch(() => LB.toast('导出失败，请重试', 'err'));
   }
 
   function html() {
     return (
       '<div class="tool-head">' +
       '<button class="back" data-back type="button" aria-label="返回"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 5.5 8 12l6.5 6.5"/></svg></button>' +
-      '<div><h1>图片风格化</h1><p>素描 / 漫画 / 复古 / 黑白，一键转换纯本地处理不上传</p></div>' +
+      '<div><h1>图片风格化</h1><p>卡通 / 漫画 / 油画 / 素描 / 铅笔 / 人像，纯本地处理不上传</p></div>' +
       '</div>' +
       '<div class="tool-body">' +
       '<div class="card">' +
@@ -262,9 +242,17 @@
       '<button class="btn btn-ghost btn-sm ocr-pick" id="isPick" type="button">选择图片</button>' +
       '</div>' +
       '<input type="file" id="isFile" accept="image/*,.jpg,.jpeg,.png,.webp,.bmp,.gif" hidden>' +
-      '<div class="seg seg-5" id="isModes">' +
-      MODES.map((m, i) => '<button class="seg-btn' + (i === 0 ? ' on' : '') + '" data-v="' + m.v + '" type="button">' + m.n + '</button>').join('') +
+
+      '<div class="seg seg-6" id="isModes">' +
+      STYLES.map((m, i) => '<button class="seg-btn' + (i === 0 ? ' on' : '') + '" data-v="' + m.v + '" type="button">' + m.n + '</button>').join('') +
       '</div>' +
+
+      '<div class="card set-card is-params">' +
+      '<div class="field"><label>边缘强度</label><input type="range" id="isEdge" min="0.5" max="1.5" step="0.05" value="1"><output id="isEdgeV">1.00</output></div>' +
+      '<div class="field"><label>色阶数</label><input type="range" id="isLevels" min="4" max="8" step="1" value="6"><output id="isLevelsV">6</output></div>' +
+      '<div class="field"><label>平滑度</label><input type="range" id="isSmooth" min="1" max="10" step="1" value="3"><output id="isSmoothV">3</output></div>' +
+      '</div>' +
+
       '<p class="is-size" id="isSize"></p>' +
       '<div class="is-box" id="isBox" hidden><canvas id="isCanvas"></canvas></div>' +
       '<p class="dn-empty2" id="isEmpty">先选一张图片，然后点上方风格切换效果。</p>' +
@@ -274,8 +262,8 @@
       '<button class="btn btn-ghost js-primary-submit" id="isDl" type="button" disabled>⬇️ 下载图片</button>' +
       '</div>' +
       '</div>' +
-      '<p class="cd-note">所有处理都在你自己的浏览器里完成，图片不会上传到任何服务器。为保证速度，最长边超过 ' +
-      MAX_SIDE + 'px 的图片会先等比缩放到 ' + MAX_SIDE + 'px 再处理（素描为逐像素算法，超大图会明显卡顿）。下载结果为 PNG。</p>' +
+      '<p class="cd-note">所有处理都在你自己的浏览器里完成，图片不会上传到任何服务器。为控制耗时，最长边超过 ' +
+      MAX_SIDE + 'px 的图片会先等比缩放再处理。下载结果为 PNG。</p>' +
       '</div>'
     );
   }
@@ -283,6 +271,9 @@
   function mount(root) {
     rootEl = root;
     root.innerHTML = html();
+    curFile = null; loadedFile = null; style = 'cartoon';
+    params = { edge: 1.0, levels: 6, smooth: 3 };
+    syncSliders();
 
     const drop = $('#isDrop', root);
     const input = $('#isFile', root);
@@ -291,8 +282,9 @@
     input.addEventListener('change', () => {
       const f = input.files && input.files[0];
       input.value = '';
-      if (f) { $('#isFname', root).textContent = f.name; $('#isFsize', root).textContent = (f.type || 'image') + ' · ' + LB.img.fmtSize(f.size); pickFile(f); }
+      if (f) pickFile(f);
     });
+
     const onOver = e => { e.preventDefault(); drop.classList.add('drag'); };
     drop.addEventListener('dragover', onOver);
     drop.addEventListener('dragenter', onOver);
@@ -301,7 +293,7 @@
       e.preventDefault();
       drop.classList.remove('drag');
       const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
-      if (f) { $('#isFname', root).textContent = f.name; pickFile(f); }
+      if (f) pickFile(f);
     });
 
     /* 粘贴：模块级 handle，unmount 时必须移除（本库无 _cleanups 约定） */
@@ -314,7 +306,6 @@
           const f = it.getAsFile();
           if (f) {
             e.preventDefault();
-            $('#isFname', rootEl).textContent = '粘贴的截图';
             pickFile(f);
             return;
           }
@@ -326,9 +317,31 @@
     $('#isModes', root).addEventListener('click', e => {
       const b = e.target.closest('.seg-btn');
       if (!b) return;
+      style = b.getAttribute('data-v');
       $$('#isModes .seg-btn', root).forEach(x => x.classList.toggle('on', x === b));
-      setMode(b.getAttribute('data-v'));
+      if (!curFile) { LB.toast('先选一张图片，再切换风格', 'info'); return; }
+      applyAndRender();
     });
+
+    $('#isEdge', root).addEventListener('input', e => {
+      params.edge = clamp(parseFloat(e.target.value) || 1, 0.5, 1.5);
+      $('#isEdgeV', root).textContent = params.edge.toFixed(2);
+      pushParams();
+      scheduleRender(260);
+    });
+    $('#isLevels', root).addEventListener('input', e => {
+      params.levels = clamp(parseInt(e.target.value, 10) || 6, 4, 8);
+      $('#isLevelsV', root).textContent = String(params.levels);
+      pushParams();
+      scheduleRender(260);
+    });
+    $('#isSmooth', root).addEventListener('input', e => {
+      params.smooth = clamp(parseInt(e.target.value, 10) || 3, 1, 10);
+      $('#isSmoothV', root).textContent = String(params.smooth);
+      pushParams();
+      scheduleRender(260);
+    });
+
     $('#isDl', root).addEventListener('click', download);
     $('#isClear', root).addEventListener('click', e => LB.confirm(e.currentTarget, clearAll));
     root.addEventListener('click', e => { if (e.target.closest('[data-back]')) LB.hash.go('home'); });
@@ -336,8 +349,12 @@
 
   function unmount() {
     if (onPaste) { document.removeEventListener('paste', onPaste); onPaste = null; }
-    if (srcURL) { try { URL.revokeObjectURL(srcURL); } catch (_) {} srcURL = ''; }
-    srcImg = null; baseCv = null; outCv = null;
+    if (debounce) { clearTimeout(debounce); debounce = 0; }
+    if (unsub) { try { unsub(); } catch (_) {} unsub = null; }
+    if (engine) { try { engine.destroy(); } catch (_) {} }
+    engine = null;
+    curFile = null; loadedFile = null;
+    seq++;
     rootEl = null;
   }
 

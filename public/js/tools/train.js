@@ -33,6 +33,36 @@
     return 'tr-seat-on';
   }
 
+  /* Step 14：后端 seat 可能是 对象 / 数组 / 字符串（MCP 文本解析出来的是字符串），统一收口渲染 */
+  function seatHtmlOf(seat) {
+    if (!seat) return '';
+
+    if (typeof seat === 'string') {
+      const s = seat.trim();
+      if (!s) return '';
+      return s.split(/[·,，;；|｜]/).map(x => x.trim()).filter(Boolean).map(x => {
+        const m = x.match(/^(.+?)[\s:：]+(\S+)$/);
+        const name = m ? m[1] : x;
+        const val = m ? m[2] : '';
+        return '<span class="tr-seat ' + seatCls(val) + '">' + esc(name) +
+          (val ? ' <b>' + esc(val) + '</b>' : '') + '</span>';
+      }).join('');
+    }
+
+    if (Array.isArray(seat)) {
+      return seat.map(x => {
+        if (typeof x === 'string') return '<span class="tr-seat tr-seat-on">' + esc(x) + '</span>';
+        const val = x && x.value != null ? x.value : '';
+        return '<span class="tr-seat ' + seatCls(val) + '">' + esc((x && x.name) || '') +
+          (val === '' ? '' : ' <b>' + esc(String(val)) + '</b>') + '</span>';
+      }).join('');
+    }
+
+    return Object.keys(seat).map(k =>
+      '<span class="tr-seat ' + seatCls(seat[k]) + '">' + esc(k) + ' <b>' + esc(String(seat[k])) + '</b></span>'
+    ).join('');
+  }
+
   function renderTrains(list) {
     const box = $('#tnList', rootEl);
     if (!list.length) { /* Step 5D-3：空结果提示 */
@@ -43,11 +73,7 @@
       return;
     }
     box.innerHTML = list.map(t => {
-      /* Step 5D-3：seat 后端可能返回字符串/数组，统一收口为对象再渲染 */
-      const seats = (t.seat && typeof t.seat === 'object' && !Array.isArray(t.seat)) ? t.seat : {};
-      const seatHtml = Object.keys(seats).map(k =>
-        '<span class="tr-seat ' + seatCls(seats[k]) + '">' + esc(k) + ' <b>' + esc(String(seats[k])) + '</b></span>'
-      ).join('');
+      const seatHtml = seatHtmlOf(t.seat);
       return (
         '<div class="card tr-item">' +
         '<span class="tr-code ' + typeCls(t.code) + '">' + esc(t.code || '') + '</span>' +
@@ -56,7 +82,7 @@
         '<small class="tr-dur">' + esc(t.duration || '') + '</small>' +
         '<div class="tr-seats">' + seatHtml + '</div>' +
         '</div>' +
-        '<div class="tr-stations"><span>' + esc(t.from || '') + '</span><span>' + esc(t.to || '') + '</span></div>' +
+        '<div class="tr-stations"><span>' + esc(t.from || '--') + '</span><span>' + esc(t.to || '--') + '</span></div>' +
         '</div>'
       );
     }).join('');

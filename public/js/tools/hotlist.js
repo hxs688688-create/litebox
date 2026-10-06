@@ -8,7 +8,7 @@
   const TTL = 10 * 60 * 1000;
   const KEY_PREFIX = 'lb_hot_cache_';
 
-  /* 热榜源配置（任务给定 + Step 6K 新增影视） */
+  /* 热榜源配置（任务给定 + Step 6K 新增影视 + Step 16 · A5 新增影视榜单两项） */
   const BOARDS = [
     { key: 'weibo', name: '微博', ic: '🔥', path: '/v2/weibo' },
     { key: 'zhihu', name: '知乎', ic: '🤔', path: '/v2/zhihu' },
@@ -17,7 +17,11 @@
     { key: 'bili', name: 'B站', ic: '📺', path: '/v2/bili' },
     { key: 'baidu', name: '百度', ic: '🔍', path: '/v2/baidu/hot' },
     /* Step 6K：豆瓣一周口碑榜。短剧榜无公开稳定源，按任务书跳过，只做影视。 */
-    { key: 'movie', name: '影视', ic: '🎬', path: '/v2/douban/weekly/movie' }
+    { key: 'movie', name: '影视', ic: '🎬', path: '/v2/douban/weekly/movie' },
+    /* Step 16 · A5：影视榜单两项走同源 /api/movie-rank（猫眼票房 / 豆瓣高分），
+       不走 60s 镜像；api 字段存在时优先用它。 */
+    { key: 'boxoffice', name: '实时票房', ic: '🎟️', api: '/api/movie-rank?type=boxoffice' },
+    { key: 'douban', name: '豆瓣高分', ic: '⭐', api: '/api/movie-rank?type=douban' }
   ];
 
   /* 镜像源（任务给定），每个 3.5 秒超时依次尝试 */
@@ -88,20 +92,20 @@
 
   function readCache(board) {
     const hit = cache.get(board);
-    if (hit && Date.now() - hit.ts < TTL) return hit.list;
+    if (hit && Date.now() - hit.ts < TTL) return { list: hit.list, note: hit.note || '' };
     try {
       const box = LB.storage.get(cacheKey(board), null);
       if (box && Array.isArray(box.list) && box.list.length && Date.now() - box.ts < TTL) {
-        cache.set(board, { ts: box.ts, list: box.list });
-        return box.list;
+        cache.set(board, { ts: box.ts, list: box.list, note: box.note || '' });
+        return { list: box.list, note: box.note || '' };
       }
     } catch (_) { /* 读缓存失败就当没有，走网络 */ }
     return null;
   }
 
-  function writeCache(board, list) {
-    cache.set(board, { ts: Date.now(), list: list });
-    try { LB.storage.set(cacheKey(board), { ts: Date.now(), list: list }); }
+  function writeCache(board, list, note) {
+    cache.set(board, { ts: Date.now(), list: list, note: note || '' });
+    try { LB.storage.set(cacheKey(board), { ts: Date.now(), list: list, note: note || '' }); }
     catch (_) { /* 配额满等，仅保留内存缓存 */ }
   }
 
@@ -111,6 +115,22 @@
     if (cached) return cached;
     const conf = BOARDS.find(b => b.key === board);
     let list = [];
+    let note = '';
+
+    /* Step 16 · A5：影视榜单走专用接口，响应是 { items:[{rank,title,hot,url,sub}], source, note } */
+    if (conf && conf.api) {
+      if (HAS_API) {
+        try {
+          const d = await LB.api.getJSON(conf.api, { timeout: 9000 });
+          list = parseRank(d);
+          note = (d && d.note) || '';
+        } catch (_) { list = []; }
+      }
+      if (!list.length) throw new Error('all-failed');
+      writeCache(board, list, note);
+      return { list: list, note: note };
+    }
+
     if (HAS_API) {
       try {
         const d = await LB.api.getJSON('/api/hotlist?board=' + encodeURIComponent(board), { timeout: 6000 });
@@ -127,11 +147,22 @@
       }
     }
     if (!list.length) throw new Error('all-failed');
-    writeCache(board, list);
-    return list;
+    writeCache(board, list, '');
+    return { list: list, note: '' };
   }
 
-  function render(list) {
+  /* 影视榜单接口 → 列表（与 parseHot 同结构，多一个 s 副标题） */
+  function parseRank(d) {
+    const arr = (d && Array.isArray(d.items)) ? d.items : [];
+    return arr.map(x => ({
+      t: x.title || '',
+      u: x.url || '',
+      h: x.hot == null ? '' : x.hot,
+      s: x.sub || ''
+    })).filter(x => x.t).slice(0, 50);
+  }
+
+  function render(list, note) {
     if (!rootEl) return;
     const listEl = $('#hlList', rootEl);
     if (!list.length) {
@@ -149,12 +180,20 @@
         const cls = no <= 3 ? ' hl-no hl-no' + no : ' hl-no';
         h += '<div class="hl-row' + (x.u ? '' : ' hl-nourl') + '" data-u="' + esc(x.u || '') + '">' +
           '<span class="' + cls + '">' + no + '</span>' +
-          '<span class="hl-t">' + esc(x.t) + '</span>' +
+          /* Step 16 · A5：影视榜单多一行副标题（类型/地区/上映日期 或 票房占比等） */
+          '<span class="hl-t">' + esc(x.t) +
+          (x.s ? '<small class="hl-sub">' + esc(x.s) + '</small>' : '') + '</span>' +
           (x.h !== '' && x.h !== undefined && x.h !== null ? '<small class="hl-h">' + esc(String(x.h)) + '</small>' : '') +
           searchLinks(x.t) +
           '</div>';
       }
       listEl.innerHTML = h;
+    }
+    /* 兜底来源提示（例：猫眼不可用 → 显示豆瓣口碑榜时如实说明） */
+    const noteEl = $('#hlNote', rootEl);
+    if (noteEl) {
+      noteEl.textContent = note || '';
+      noteEl.hidden = !note;
     }
     $('#hlEmpty', rootEl).hidden = true;
     $('#hlErr', rootEl).hidden = true;
@@ -164,6 +203,8 @@
   function showLoading() {
     /* Step 8：加载态从「正在加载…」文案换成骨架屏 */
     $('#hlErr', rootEl).hidden = true;
+    const noteEl = $('#hlNote', rootEl);
+    if (noteEl) noteEl.hidden = true;
     const listEl = $('#hlList', rootEl);
     listEl.hidden = false;
     LB.ui.skeleton(listEl, 6, 'list');
@@ -173,6 +214,8 @@
     if (!rootEl) return;
     $('#hlList', rootEl).hidden = true;
     $('#hlEmpty', rootEl).hidden = true;
+    const noteEl = $('#hlNote', rootEl);
+    if (noteEl) noteEl.hidden = true;
     $('#hlErr', rootEl).hidden = false;
     /* Step 8：统一三段式错误提示 */
     LB.fail('热榜', '所有数据源都暂时不可用', '检查网络后点击重试');
@@ -184,9 +227,9 @@
     const my = ++seq;
     showLoading();
     try {
-      const list = await fetchBoard(board);
+      const r = await fetchBoard(board);
       if (my !== seq) return;
-      render(list);
+      render(r.list, r.note);
     } catch (e) {
       if (my !== seq) return;
       showErr();
@@ -201,10 +244,11 @@
     return (
       '<div class="tool-head">' +
       '<button class="back" data-back type="button" aria-label="返回"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 5.5 8 12l6.5 6.5"/></svg></button>' +
-      '<div><h1>热榜聚合</h1><p>微博 / 知乎 / 抖音 / 头条 / B站 / 百度 / 影视，一页看全</p></div>' +
+      '<div><h1>热榜聚合</h1><p>微博 / 知乎 / 抖音 / 头条 / B站 / 百度 / 影视 / 实时票房 / 豆瓣高分，一页看全</p></div>' +
       '</div>' +
       '<div class="tool-body">' +
       '<div class="hl-chips" id="hlChips">' + chipsHtml() + '</div>' +
+      '<p class="cd-note hl-note" id="hlNote" hidden></p>' +
       '<div class="card hl-card">' +
       '<div id="hlList" hidden></div>' +
       '<p class="hl-empty" id="hlEmpty" hidden></p>' +
@@ -216,7 +260,8 @@
       '<button class="btn btn-main es-cta" id="hlRetry" type="button">重新获取</button>' +
       '</div></div>' +
       '</div>' +
-      '<p class="cd-note">热榜数据 10 分钟内缓存复用；悬停条目可跳转百度 / B站 / 知乎搜索，点击条目在新标签页打开原文。</p>' +
+      '<p class="cd-note">热榜数据 10 分钟内缓存复用；悬停条目可跳转百度 / B站 / 知乎搜索，点击条目在新标签页打开原文。' +
+      '「实时票房」取自猫眼专业版当日实时数据，「豆瓣高分」按类型取豆瓣口碑榜。</p>' +
       '</div>'
     );
   }

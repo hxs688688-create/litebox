@@ -1,4 +1,5 @@
-/* LiteBox v5 · tools/fix.js — 图片修复去水印（涂抹/框选/试卷模式 + 加权边界扩散智能填充 + 白纸增强） */
+/* LiteBox v5 · tools/fix.js — 图片修复去水印（涂抹/框选 + 加权边界扩散智能填充）
+   Step 14：移除「试卷模式」（已独立为 handwriting-remove 工具），并新增「↺ 重新上传」。 */
 (function () {
   'use strict';
 
@@ -7,13 +8,12 @@
   let srcImg = null;
   let cv = null, cover = null;      /* 底层图片 / 顶层蒙版 */
   let ictx = null, mctx = null;
-  let mode = 'brush';               /* brush | rect | exam */
+  let mode = 'brush';               /* brush | rect */
   let brush = 28;
   let painting = false, last = null, rectStart = null;
   let undoStack = [];               /* 智能填充前 push，最多 5 层 */
   let pasteCleanups = [];   /* 粘贴监听取消函数列表（Step 5A bindPasteAll 统一收口） */
   let maskColor = 'rgba(255,255,255,.5)'; /* 兜底，实际从 tokens 读取 */
-  let examEnhanced = false;  /* 白纸增强是否已应用（试卷模式） */
 
   const clamp255 = v => v < 0 ? 0 : v > 255 ? 255 : v;
 
@@ -53,7 +53,6 @@
 
   function updateCursor(e) {
     const cur = $('#fxCursor', rootEl);
-    /* exam 也是涂抹式，光标要跟着笔刷大小显示 */
     if (mode === 'rect' || !srcImg) { cur.hidden = true; return; }
     const wrap = $('#fxWrap', rootEl);
     const wr = wrap.getBoundingClientRect();
@@ -71,7 +70,7 @@
       if (!srcImg) return;
       cv.setPointerCapture(e.pointerId); /* 移动端持续跟踪 */
       const p = toXY(e);
-      if (mode === 'brush' || mode === 'exam') {
+      if (mode === 'brush') {
         painting = true;
         last = p;
         mctx.beginPath();
@@ -86,7 +85,7 @@
     });
     cv.addEventListener('pointermove', e => {
       updateCursor(e);
-      if ((mode === 'brush' || mode === 'exam') && painting) {
+      if (mode === 'brush' && painting) {
         /* 从上一个点到当前点连线，避免快速拖动断点 */
         const p = toXY(e);
         mctx.beginPath();
@@ -103,7 +102,7 @@
       }
     });
     const finish = e => {
-      if (mode === 'brush' || mode === 'exam') {
+      if (mode === 'brush') {
         painting = false;
       } else if (rectStart) {
         const p = toXY(e);
@@ -255,22 +254,17 @@
         featherEdges();
         ictx.putImageData(imgData, 0, 0);
         mctx.clearRect(0, 0, W, H); /* 清空蒙版 */
-        /* 试卷模式：填充完成后自动白纸增强 */
-        if (mode === 'exam') {
-          applyExamEnhance();
-          LB.toast('✅ 手写已消除 · 已应用白纸增强', 'ok');
-        } else {
-          LB.toast('填充完成', 'ok');
-        }
+        LB.toast('填充完成', 'ok');
       }
     }
     chunk();
   }
 
-  /* ============ 白纸增强（Step 6D · 试卷模式）============
+  /* ============ 白纸增强（Step 6D · 供文档类工具复用）============
      原理：1%/99% 分位数做线性拉伸（跳过 1% 噪点，避免个别异常像素拉偏整体），
      再把 220+ 的亮部统一提到 245+，让纸张更白、印刷文字对比更明显。
-     ★ 只做整体对比拉伸，不做二值化 —— 印刷笔画不会被淡化。 */
+     ★ 只做整体对比拉伸，不做二值化 —— 印刷笔画不会被淡化。
+     Step 14：本工具不再自动调用，仅通过 LB.img.whiteEnhance 供 docscan 复用。 */
   function whiteEnhance(ctx, W, H) {
     const imgData = ctx.getImageData(0, 0, W, H);
     const d = imgData.data;
@@ -303,25 +297,6 @@
     ctx.putImageData(imgData, 0, 0);
   }
 
-  /* 试卷模式：填充完成后自动执行白纸增强，并显示提示条 */
-  function applyExamEnhance() {
-    if (!ictx || !cv.width) return;
-    undoStack.push(ictx.getImageData(0, 0, cv.width, cv.height));
-    if (undoStack.length > 5) undoStack.shift();
-    whiteEnhance(ictx, cv.width, cv.height);
-    examEnhanced = true;
-    const bar = $('#fxExamBar', rootEl);
-    if (bar) bar.hidden = false;
-  }
-
-  function undoEnhance() {
-    if (!examEnhanced) return;
-    const prev = undoStack.pop();
-    if (prev) { ictx.putImageData(prev, 0, 0); examEnhanced = false; }
-    const bar = $('#fxExamBar', rootEl);
-    if (bar) bar.hidden = true;
-  }
-
   /* ============ 按住看原图 ============ */
   function bindPeek() {
     const btn = $('#fxPeek', rootEl);
@@ -352,9 +327,6 @@
     }
     srcImg = img;
     undoStack = [];
-    examEnhanced = false;
-    const eb = $('#fxExamBar', rootEl);
-    if (eb) eb.hidden = true;
     /* Step 5D-1 统一规则 5：等比缩放尺寸，底层与蒙版 canvas 属性完全一致，clearRect 后 4 参绘制整图 */
     const { w, h } = LB.img.fitSize(img.naturalWidth, img.naturalHeight, 1500);
     cv.width = w; cv.height = h;
@@ -369,6 +341,24 @@
     $('#fxWork', rootEl).hidden = false;
   }
 
+  /* Step 14：重新上传 —— 清空当前状态并回到上传区，无需刷新页面 */
+  function reselect() {
+    srcImg = null;
+    undoStack = [];
+    painting = false;
+    rectStart = null;
+    if (cv) { cv.width = cv.height = 1; }
+    if (cover) { cover.width = cover.height = 1; }
+    $('#fxPick', rootEl).hidden = false;
+    $('#fxWork', rootEl).hidden = true;
+    $('#fxRect', rootEl).hidden = true;
+    $('#fxCursor', rootEl).hidden = true;
+    /* 清空文件输入，允许重复选择同一个文件 */
+    const fi = $('#fxFile', rootEl);
+    if (fi) fi.value = '';
+    LB.toast('已重置，可重新选择图片', 'ok');
+  }
+
   function html() {
     return (
       '<div class="tool-head">' +
@@ -381,22 +371,20 @@
       '<input type="file" id="fxFile" accept="image/*" hidden>' +
       '</div>' +
       '<div id="fxWork" hidden>' +
-      '<div class="tool-sec"><span class="tool-lab" id="fxGuide">涂抹或框选要消除的区域，然后点"智能填充"</span>' +
+      '<div class="tool-sec"><div class="fx-head">' +
+      '<span class="tool-lab" id="fxGuide">涂抹或框选要消除的区域，然后点"智能填充"</span>' +
+      '<button class="btn btn-ghost btn-sm" id="fxReupload" type="button">↺ 重新上传</button>' +
+      '</div>' +
       '<div class="crop-wrap" id="fxWrap">' +
       '<canvas id="fxCv" width="0" height="0"></canvas>' +
       '<canvas id="fxCover" class="cover" width="0" height="0"></canvas>' +
       '<div id="fxRect" hidden></div>' +
       '<div id="fxCursor" hidden></div>' +
       '</div></div>' +
-      '<div class="fx-exam-bar" id="fxExamBar" hidden>' +
-      '<span>✅ 手写已消除 · 已应用白纸增强</span>' +
-      '<button class="btn btn-ghost btn-sm" id="fxNoEnhance" type="button">↺ 关闭增强</button>' +
-      '</div>' +
       '<div class="tool-sec"><span class="tool-lab">模式</span>' +
-      '<div class="seg seg-3" id="fxMode">' +
+      '<div class="seg seg-2" id="fxMode">' +
       '<button class="seg-btn on" data-m="brush" type="button">涂抹</button>' +
       '<button class="seg-btn" data-m="rect" type="button">框选</button>' +
-      '<button class="seg-btn" data-m="exam" type="button">📝 试卷模式</button>' +
       '</div>' +
       '<div class="field" id="fxBrushRow"><label>笔刷</label><input type="range" id="fxBrush" min="8" max="90" step="1" value="28"><output id="fxBrushV">28</output></div>' +
       '</div>' +
@@ -415,7 +403,7 @@
   function mount(root) {
     rootEl = root;
     root.innerHTML = html();
-    srcImg = null; undoStack = []; painting = false; rectStart = null; mode = 'brush'; brush = 28; examEnhanced = false;
+    srcImg = null; undoStack = []; painting = false; rectStart = null; mode = 'brush'; brush = 28;
 
     cv = $('#fxCv', root);
     cover = $('#fxCover', root);
@@ -448,21 +436,11 @@
       if (!b) return;
       $$('#fxMode .seg-btn', root).forEach(x => x.classList.toggle('on', x === b));
       mode = b.dataset.m;
-      /* 笔刷行：涂抹与试卷模式都需要涂抹，框选不需要 */
+      /* 笔刷行：涂抹需要，框选不需要 */
       $('#fxBrushRow', root).hidden = mode === 'rect';
       if (mode === 'rect') $('#fxCursor', root).hidden = true;
-      /* 试卷模式：笔刷默认加粗到 32px（手写答案区域大） */
-      if (mode === 'exam') {
-        brush = 32;
-        $('#fxBrush', root).value = '32';
-        $('#fxBrushV', root).textContent = '32';
-        setBrush(32);
-        $('#fxGuide', root).textContent = '涂抹手写答案区域 → 点智能填充 → 自动白纸增强';
-      } else {
-        $('#fxGuide', root).textContent = '涂抹或框选要消除的区域，然后点"智能填充"';
-      }
     });
-    $('#fxNoEnhance', root).addEventListener('click', undoEnhance);
+    $('#fxReupload', root).addEventListener('click', reselect);
     $('#fxBrush', root).addEventListener('input', e => {
       $('#fxBrushV', root).textContent = e.target.value;
       setBrush(e.target.value);
@@ -486,7 +464,6 @@
   function unmount() {
     pasteCleanups.forEach(fn => fn()); pasteCleanups = [];
     srcImg = null; undoStack = []; cv = null; cover = null; ictx = null; mctx = null;
-    examEnhanced = false;
     rootEl = null;
   }
 

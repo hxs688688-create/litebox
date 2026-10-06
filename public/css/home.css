@@ -4,65 +4,29 @@
    --fav-gold/--ct-ic-bg）。
    ========================================================= */
 
-/* ---------- Hero ---------- */
-/* 重置全局顶栏 header 样式对 hero（也是 header 标签）的影响 */
+/* ---------- Hero（Step 12 · A1~A3：保留 hero，只做压缩 + 精致化） ----------
+   Step 11 曾把 hero 整块删掉，Step 12 按任务书恢复（删 hero 的方案作废）。 */
+/* hero 用的是 <header> 标签，会吃到 layout.css 里顶栏 header 的 sticky / 高度 / 毛玻璃，
+   这里逐条重置回普通块级元素（原 Step 5D 就有的处理，恢复时一并带回）。 */
 header.hero{
   position:static;top:auto;z-index:auto;height:auto;
   background:none;border:none;
   backdrop-filter:none;-webkit-backdrop-filter:none;
 }
-.hero{text-align:center;padding:72px 16px 46px}
-.hero-badge{
-  display:inline-flex;align-items:center;gap:7px;
-  white-space:nowrap; /* Step 5D：徽章整体单行，禁止文本节点与 <b> 各自换行 */
-  padding:6px 15px;border-radius:var(--radius-pill);
-  background:var(--glass-bg);border:1px solid var(--glass-border);
-  backdrop-filter:blur(var(--glass-blur));-webkit-backdrop-filter:blur(var(--glass-blur));
-  box-shadow:var(--shadow-sm);
-  font-size:12px;font-weight:700;color:var(--fg2);
-}
-.hero-badge .dot{width:7px;height:7px;border-radius:50%;background:var(--ok);animation:lbpulse 2.2s infinite}
-@keyframes lbpulse{
-  0%,100%{box-shadow:0 0 0 0 var(--ok-soft)}
-  50%{box-shadow:0 0 0 5px var(--ok-soft)}
-}
+.hero{text-align:center;padding:28px 16px 20px}   /* A2：原 72px 46px → 28px 20px */
 .hero h1{
-  margin:16px 0 8px;
-  font-size:clamp(30px,5.4vw,50px);font-weight:900;letter-spacing:1px;
-  background:var(--brand-grad);
+  margin:0;
+  font-size:clamp(28px,5vw,40px);letter-spacing:.5px;line-height:1.2;font-weight:900;
+  /* A3：三段品牌渐变文字（第三段 --brand3 收口在 tokens.css） */
+  background:var(--brand-grad-3);
   -webkit-background-clip:text;background-clip:text;
   -webkit-text-fill-color:transparent;color:transparent;
 }
-.hero p{font-size:13.5px;color:var(--fg2);max-width:520px;margin:0 auto}
+.hero p{font-size:14px;color:var(--fg2);max-width:480px;margin:10px auto 0}
 
-/* ---------- 搜索框 ---------- */
-.search-wrap{position:relative;max-width:560px;margin:0 auto}
-.search-wrap input{
-  width:100%;padding:14px 44px 14px 46px;
-  border-radius:18px;border:1px solid var(--glass-border);
-  background:var(--glass-bg);color:var(--fg);font-size:14px;outline:none;
-  backdrop-filter:blur(var(--glass-blur));-webkit-backdrop-filter:blur(var(--glass-blur));
-  box-shadow:var(--shadow-sm);
-  transition:border-color 200ms,box-shadow 200ms;
-}
-.search-wrap input::placeholder{color:var(--fg3)}
-.search-wrap input:focus{border-color:var(--brand1);box-shadow:var(--ring-lg)}
-.search-ic{
-  position:absolute;left:16px;top:50%;transform:translateY(-50%);
-  width:18px;height:18px;color:var(--fg3);pointer-events:none;
-  z-index:1; /* Step 5D：input 的 backdrop-filter 创建 stacking context 且 DOM 靠后会盖住图标，提层修复 */
-}
-.sw-clear{
-  position:absolute;right:14px;top:50%;transform:translateY(-50%);
-  width:22px;height:22px;border-radius:50%;
-  background:var(--card2);color:var(--fg3);
-  display:flex;align-items:center;justify-content:center;
-  font-size:13px;line-height:1;
-  transition:transform var(--dur) var(--ease-spring),color 200ms;
-}
-.sw-clear:hover{transform:translateY(-50%) rotate(90deg);color:var(--fg)}
-
-/* ---------- 分类 dock（sticky 玻璃条） ---------- */
+/* ---------- 分类 dock（sticky 玻璃条） ----------
+   Step 23 · 五：搜索框搬进顶栏 header 后，首页只剩顶栏一层吸顶，
+   分类条直接贴在 header 下沿（--search-h 与 .search-wrap 已整体删除）。 */
 .home-cat-nav{
   position:sticky;top:var(--head-h);z-index:65;
   margin:10px 0 12px;padding:7px;border-radius:22px;
@@ -133,16 +97,11 @@ header.hero{
 .tool-card .fav-btn.on{opacity:1;color:var(--fav-gold)}
 @media(max-width:640px){.tool-card{min-height:102px;padding:11px 12px}}
 
-/* ---------- 空态（首页区块级） ---------- */
-.empty-state .es-ic{
-  width:52px;height:52px;border-radius:16px;margin:0 auto 10px;
-  display:grid;place-items:center;font-size:24px;
-  background:color-mix(in srgb,var(--brand1) 12%,transparent);
-  border:1px solid var(--glass-border);color:var(--brand1);
-}
-.empty-state .es-t{font-size:15px;font-weight:800;color:var(--fg)}
-.empty-state .es-d{font-size:12.5px;color:var(--fg3)}
-#favEmpty,#emptyTip{min-height:0;padding:42px 16px}
+/* ---------- 空态（首页区块级） ----------
+   Step 11 · A7：图标 / 标题 / 副标题统一走 components.css 的
+   .empty-state .es-icon / .es-title / .es-sub（与 ui/empty.js 同一套类名），
+   此处只按首页密度收紧内边距，不再重复定义字号与颜色。 */
+#favEmpty,#emptyTip{min-height:0;padding:36px 16px}
 
 /* ---------- 分类弹层宫格 ---------- */
 .cat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;padding-bottom:8px}
@@ -173,46 +132,3 @@ header.hero{
 /* ---------- 弹层打开锁滚动（body.scroll-lock 由 ui/sheet.js 控制） ---------- */
 body.scroll-lock{overflow:hidden}
 .sheet{overscroll-behavior:contain}
-
-/* =========================================================
-   Step 6E：首页「今日诗词 + 热搜滚动条」
-   ========================================================= */
-.home-daily{max-width:560px;margin:18px auto 0;display:flex;flex-direction:column;gap:10px}
-
-.home-daily-poem{
-  background:color-mix(in srgb,var(--card) 80%,transparent);
-  border:1px solid var(--line);
-  border-radius:14px;padding:12px 16px;
-  font-size:13px;color:var(--fg2);
-  text-align:center;line-height:1.7;
-}
-.home-daily-poem .dp-label{font-size:11px;color:var(--fg3);margin-right:6px}
-.home-daily-poem .dp-author{font-size:11px;color:var(--fg3);margin-left:6px}
-.home-daily-poem .dp-body{color:var(--fg)}
-
-.home-daily-hot{
-  background:color-mix(in srgb,var(--card) 80%,transparent);
-  border:1px solid var(--line);
-  border-radius:14px;padding:8px 14px;
-  display:flex;align-items:center;gap:10px;overflow:hidden;
-}
-.home-daily-hot .dh-label{flex:0 0 auto;font-size:11.5px;color:var(--fg3)}
-.dh-track{flex:1;min-width:0;white-space:nowrap;overflow:hidden;animation:dhScroll 32s linear infinite}
-/* 内容渲染两遍，translateX(-50%) 正好走完一个循环 → 无缝衔接 */
-.dh-track span{display:inline-block;padding:0 18px;font-size:12.5px;color:var(--fg2)}
-.dh-track a{color:inherit;text-decoration:none}
-.dh-track a:hover{color:var(--brand1)}
-/* 悬停暂停，方便用户点中某一条 */
-.dh-track:hover{animation-play-state:paused}
-@keyframes dhScroll{
-  from{transform:translateX(0)}
-  to{transform:translateX(-50%)}
-}
-/* 尊重系统的「减少动态效果」设置 */
-@media (prefers-reduced-motion:reduce){
-  .dh-track{animation:none}
-}
-@media (max-width:420px){
-  .home-daily{margin:14px auto 0}
-  .home-daily-poem{padding:10px 12px;font-size:12.5px}
-}

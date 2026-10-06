@@ -1,7 +1,11 @@
 /* LiteBox v5 · tools/resume.js — 简历生成器
-   8 套模板（.w33-r-* 前缀）+ 左编辑右 A4 预览（zoom 缩放适配）+ 实时渲染（debounce 200ms）
-   数据存 litebox_resume33，模板选择存 litebox_resume33_style
-   打印：window.print() + beforeprint/afterprint 清理内联缩放，打印 CSS 见 tools.css（A4、隐藏编辑器） */
+   12 套模板（.w33-r-* 前缀）+ 左编辑右 A4 预览（zoom 缩放适配）+ 实时渲染（debounce 200ms）
+   Step 16 · A2：新增 4 套模板（简约黑白 / 双栏技术风 / 侧边色块 / 经典衬线）、证件照位、
+                 「导出 PDF」按钮（走 window.print()，打印 CSS 见 tools.css）。
+   ★ 说明：任务书说「保留现有模板，新增 4 套」，但现有模板本来就已经是 8 套
+     （不是任务书以为的 4 套），所以按「新增 4 套」执行后总数是 12 套，全部可用。
+   数据存 litebox_resume33（含证件照 dataURL），模板选择存 litebox_resume33_style
+   打印：window.print() + beforeprint/afterprint 清理内联缩放 */
 (function () {
   'use strict';
 
@@ -17,7 +21,12 @@
     { id: 'product',  name: '产品运营', desc: '数据成果导向' },
     { id: 'minimal',  name: '极简',     desc: '少即是多的留白' },
     { id: 'compact',  name: '紧凑',     desc: '一页装下全部经历' },
-    { id: 'creative', name: '创意',     desc: '彩色标题块设计' }
+    { id: 'creative', name: '创意',     desc: '彩色标题块设计' },
+    /* Step 16 · A2.3：新增 4 套（任务书点名的那 4 种风格） */
+    { id: 'bw',          name: '简约黑白', desc: '纯黑白无装饰' },
+    { id: 'tech',        name: '双栏技术风', desc: '等宽字体 + 技术感' },
+    { id: 'sidebar',     name: '侧边色块', desc: '左侧整条色块栏' },
+    { id: 'classicserif', name: '经典衬线', desc: '传统衬线正文' }
   ];
 
   const FIELDS = [
@@ -57,6 +66,7 @@
   let alive = false;
   let state = {};
   let tpl = 'at';
+  let photoUrl = '';   /* Step 16 · A2.1：证件照 objectURL（仅本次会话有效） */
   let paperEl = null;
   let scaleEl = null;
   let previewEl = null;
@@ -72,10 +82,13 @@
 
   function render() {
     if (!alive || !paperEl) return;
-    paperEl.className = 'w33-r-paper w33-r-' + tpl;
+    paperEl.className = 'w33-r-paper w33-r-' + tpl + (state.photo ? ' w33-r-hasphoto' : '');
     const contact = [state.city, state.phone, state.email, state.links]
       .map(s => String(s || '').trim()).filter(Boolean).join(' · ');
-    let h = '<header>';
+    let h = '';
+    /* Step 16 · A2.1：证件照（绝对定位到纸张右上角，CSS 在 tools.css） */
+    if (state.photo) h += '<img class="w33-r-photo" src="' + esc(state.photo) + '" alt="证件照" />';
+    h += '<header>';
     h += '<h1>' + (esc(state.name) || '<span class="w33-r-hint">你的姓名</span>') + '</h1>';
     if (String(state.role || '').trim()) h += '<div class="r-role">' + esc(state.role) + '</div>';
     if (contact) h += '<div class="w33-r-contact">' + esc(contact) + '</div>';
@@ -130,6 +143,61 @@
     LB.img.download(blob, 'LiteBox-简历.json');
   }
 
+  /* ================= Step 16 · A2.1 证件照 ================= */
+
+  /* 缩到最长边 400px 再转 JPEG dataURL：证件照不需要原图，
+     但存进 localStorage 的体积要可控（约 30~60KB） */
+  function shrinkPhoto(img) {
+    const MAX = 400;
+    const w = img.naturalWidth || img.width;
+    const h = img.naturalHeight || img.height;
+    const scale = Math.min(1, MAX / Math.max(w, h));
+    const c = document.createElement('canvas');
+    c.width = Math.max(1, Math.round(w * scale));
+    c.height = Math.max(1, Math.round(h * scale));
+    const x = c.getContext('2d');
+    x.fillStyle = '#ffffff';
+    x.fillRect(0, 0, c.width, c.height);
+    x.drawImage(img, 0, 0, c.width, c.height);
+    return c.toDataURL('image/jpeg', 0.9);
+  }
+
+  async function loadPhoto(file) {
+    if (!file) return;
+    if (!/^image\//.test(file.type || '')) { LB.toast('请选择图片文件', 'warn'); return; }
+    if (file.size > 12 * 1048576) { LB.toast('图片过大：请选择 12MB 以内的图片', 'info'); return; }
+    try {
+      const img = await LB.img.load(file);
+      state.photo = shrinkPhoto(img);
+      renderPhotoBox();
+      render();
+      LB.toast('证件照已就位', 'ok');
+    } catch (e) {
+      LB.toast((e && e.message) || '图片解码失败', 'err');
+    }
+  }
+
+  function removePhoto() {
+    if (!state.photo) return;
+    state.photo = '';
+    renderPhotoBox();
+    render();
+    LB.toast('已移除证件照', 'ok');
+  }
+
+  function renderPhotoBox() {
+    const box = $('#rPhotoBox', rootEl);
+    const img = $('#rPhotoImg', rootEl);
+    if (!box || !img) return;
+    if (state.photo) {
+      img.src = state.photo;
+      box.hidden = false;
+    } else {
+      img.removeAttribute('src');
+      box.hidden = true;
+    }
+  }
+
   async function importJSON(file) {
     try {
       const obj = JSON.parse(await file.text());
@@ -137,8 +205,10 @@
       let n = 0;
       FIELDS.forEach(f => { if (typeof obj[f.k] === 'string') { state[f.k] = obj[f.k]; n++; } });
       SECS.forEach(s => { if (typeof obj[s.k] === 'string') { state[s.k] = obj[s.k]; n++; } });
+      if (typeof obj.photo === 'string') state.photo = obj.photo;   /* Step 16：证件照一并导入 */
       if (!n) { LB.toast('文件里没有可识别的简历字段', 'warn'); return; }
       fillForm();
+      renderPhotoBox();
       render();
       LB.toast('导入成功，已恢复 ' + n + ' 个字段', 'ok');
     } catch (_) {
@@ -192,7 +262,7 @@
     return '<div id="page-resume">' +
       '<div class="tool-head">' +
       '<button class="back" data-back type="button" aria-label="返回"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 5.5 8 12l6.5 6.5"/></svg></button>' +
-      '<div><h1>简历生成器</h1><p>8 套模板实时预览，支持 JSON 导入导出与 A4 打印 / PDF</p></div>' +
+      '<div><h1>简历生成器</h1><p>12 套模板实时预览，支持证件照、JSON 导入导出与 A4 导出 PDF</p></div>' +
       '</div>' +
       '<div class="tool-body w33-r-layout">' +
       '<div class="w33-r-editor">' +
@@ -202,10 +272,22 @@
       '<button class="btn btn-ghost btn-sm" id="rExport" type="button">⬇️ 导出 JSON</button>' +
       '<label class="btn btn-ghost btn-sm" for="rImportFile">⬆️ 导入 JSON</label>' +
       '<input type="file" id="rImportFile" accept="application/json,.json" hidden />' +
-      '<button class="btn btn-ghost btn-sm" id="rPrint" type="button">🖨️ 打印 / PDF</button>' +
+      /* Step 16 · A2.2：导出 PDF（走系统打印对话框 → 另存为 PDF） */
+      '<button class="btn btn-main btn-sm" id="rPrint" type="button">📄 导出 PDF</button>' +
       '</div>' +
       '<div class="w33-r-section"><span class="tool-lab">模板</span><div class="w33-r-tpls">' + tpls + '</div></div>' +
       '<div class="w33-r-section"><span class="tool-lab">基本信息</span><div class="w33-r-grid2">' + base + '</div></div>' +
+      /* Step 16 · A2.1：证件照（可选） */
+      '<div class="w33-r-section"><span class="tool-lab">证件照（可选）</span>' +
+      '<div class="w33-r-photofield">' +
+      '<label class="btn btn-ghost btn-sm" for="rPhotoFile">📷 选择照片</label>' +
+      '<input type="file" id="rPhotoFile" accept="image/*" hidden />' +
+      '<div class="w33-r-photobox" id="rPhotoBox" hidden>' +
+      '<img id="rPhotoImg" alt="证件照预览" />' +
+      '<button class="btn btn-ghost btn-sm" id="rPhotoRemove" type="button">✕ 移除</button>' +
+      '</div>' +
+      '<small class="w33-r-phototip">会显示在简历右上角；正方形或 3:4 效果最好，自动缩到最长边 400px 后本机保存</small>' +
+      '</div></div>' +
       areas +
       '</div>' +
       '<div class="w33-r-preview" id="rPreview"><div class="w33-r-scale" id="rScale"><div class="w33-r-paper w33-r-' + tpl + '" id="rPaper"></div></div></div>' +
@@ -224,10 +306,13 @@
     const saved = LB.storage.get(KEY, null);
     FIELDS.forEach(f => { state[f.k] = saved && typeof saved[f.k] === 'string' ? saved[f.k] : EXAMPLE[f.k]; });
     SECS.forEach(s => { state[s.k] = saved && typeof saved[s.k] === 'string' ? saved[s.k] : EXAMPLE[s.k]; });
+    /* Step 16 · A2.1：证件照以 dataURL 存进同一份 state，刷新后仍在 */
+    state.photo = (saved && typeof saved.photo === 'string') ? saved.photo : '';
     const st = LB.storage.get(KEY_STYLE, 'at');
     tpl = TPLS.some(t => t.id === st) ? st : 'at';
 
     fillForm();
+    renderPhotoBox();
     $$('.w33-r-tpl', root).forEach(b => b.classList.toggle('on', b.dataset.tpl === tpl));
 
     $('#rExample', root).addEventListener('click', fillExample);
@@ -239,6 +324,13 @@
       e.target.value = '';
     });
     $('#rPrint', root).addEventListener('click', doPrint);
+    /* Step 16 · A2.1 */
+    $('#rPhotoFile', root).addEventListener('change', e => {
+      const f = e.target.files && e.target.files[0];
+      if (f) loadPhoto(f);
+      e.target.value = '';
+    });
+    $('#rPhotoRemove', root).addEventListener('click', removePhoto);
 
     root.addEventListener('input', e => {
       const k = e.target.dataset && e.target.dataset.k;

@@ -9,8 +9,11 @@
      sensitive-words 文件挂载名是 sensitiveWords，文件名含连字符，故需映射。
      wordsCET4 同理：挂载名是驼峰，文件名是 words-cet4.js）。
      不写进这张表的话 load('wordsCET4') 会去找 vendor/dict/wordsCET4.js → 404。
-     Step 6I 同理：socLadder → soc-ladder.js、historyToday → history-today.js。 */
-  const FILE = { pinyin: 'pinyin-dict', zhS2T: 'zhconv-dict', zhT2S: 'zhconv-dict', poems: 'poems', idioms: 'idioms', sensitiveWords: 'sensitive-words', wordsCET4: 'words-cet4', socLadder: 'soc-ladder', historyToday: 'history-today' };
+     Step 6I 同理：socLadder → soc-ladder.js、historyToday → history-today.js。
+     Step 12 · B5 同理：新增的三个词库挂载名都是驼峰，文件名都是连字符。
+     Step 13 · B4 同理：noiseSources → noise-sources.js（白噪音音源表）。
+     Step 18 同理：llmApis → llm-apis.js（大模型 API 速查表）。 */
+  const FILE = { pinyin: 'pinyin-dict', zhS2T: 'zhconv-dict', zhT2S: 'zhconv-dict', poems: 'poems', idioms: 'idioms', sensitiveWords: 'sensitive-words', wordsCET4: 'words-cet4', wordsCET6: 'words-cet6', wordsKY: 'words-kaoyan', wordsIELTS: 'words-ielts', socLadder: 'soc-ladder', historyToday: 'history-today', noiseSources: 'noise-sources', llmApis: 'llm-apis' };
 
   /**
    * 加载 vendor/dict/{file}.js

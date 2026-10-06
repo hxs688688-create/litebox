@@ -1,42 +1,32 @@
-/* LiteBox v5 · tools/scicalc.js — 科学计算器（递归下降求值，不用 eval / Function）
+/* LiteBox v5 · tools/scicalc.js — 计算器（Step 20 · A1：基础 / 科学双模式）
  *
- * 【★ 为什么不用任务书给的「白名单 + Function」方案】
- *   任务书示例是「先用一条正则白名单放行，再把表达式替换成 JS 片段，
- *   最后拼成 Function 构造求值」（具体写法见任务书 Step 6H 第四节）。
- *   这个方案有两处硬伤：
+ * 【基础模式】即算即显状态机：acc(累计值) + op(待运算符) + entry(正在输入的数)。
+ *   5 + 3 = 8 → 再按 × 2 = 16（= 后按运算符自动把累计值当左操作数）。
+ *   待运算的运算符按钮高亮（.on）。
  *
- *   1) 白名单形同虚设。正则里为了容纳 sin/cos/tan/log/ln，把 a-z 全部字母都放行了，
- *      于是 constructor、Function、eval、window 这些都能通过检查。
- *      虽然最终拼进 Function 的表达式里需要括号与运算符配合才能构成可执行payload，
- *      但「白名单」这个安全前提本身是假的 —— 依赖「拼出来的字符串恰好无害」是运气不是防御。
- *   2) 替换链脆弱。√→Math.sqrt、log→Math.log10 之后还要继续做正则替换，
- *      一旦顺序不当就会把已替换出的 Math.xxx 再次污染（例如 ln 规则若不带词边界，
- *      会命中 Math 里的字母序列）。
+ * 【科学模式】表达式输入：顶部显示表达式、底部显示结果。
+ *   沿用 Step 15 · A1 的设计——输入阶段只做字符白名单校验（sin( 这种未闭合
+ *   状态一律放行、不报错），点「＝」才完整求值并自动补全缺失的右括号。
+ *   ★ 求值用**递归下降解析器**（不用任务书示例的「白名单 + Function」方案）：
+ *     那个方案把用户输入拼接成可执行代码（白名单形同虚设，有注入面）；
+ *     递归下降把输入只当「数字 / 运算符 / 函数」三类 token 处理，从根上消除注入。
  *
- *   本实现改为**递归下降解析器**：先把输入切成 token，再按优先级文法求值。
- *   整条链路上用户输入只被当作「数字」和「运算符」两类数据处理，
- *   永远不会被拼接成可执行代码 —— 这是从根上消除注入面，而不是靠正则赌。
- *
- *   （副作用：本文件注释里刻意不写含「斜杠+星号」序列的正则示例，
- *    否则任何剥注释的测试工具都会在那个位置提前闭合注释、解析失败。）
- * 【文法（优先级从低到高）】
- *   expr    := term (('+' | '-') term)*
- *   term    := unary (('*' | '/' | '%') unary)*
- *   unary   := ('+' | '-') unary | power
- *   power   := postfix ('^' unary)?          ← 右结合，且指数能带负号(-2^2 = -4)
- *   postfix := primary ('!')*                 ← 阶乘
- *   primary := 数字 | 常量(π/e) | 函数 '(' expr ')' | '(' expr ')' | √前缀
+ * 【历史】litebox_calc_history 最近 10 条，点击回填表达式（旧键 litebox_scicalc_hist 迁移）。
  */
 (function () {
   'use strict';
 
-  const { $ } = LB.dom;
-  const KEY = 'litebox_scicalc_hist';
+  const { $, $$ } = LB.dom;
+  const KEY = 'litebox_calc_history';
+  const KEY_LEGACY = 'litebox_scicalc_hist';
+  const HIST_MAX = 10;
 
   let rootEl = null;
   let hist = [];
+  let mode = 'basic';   /* 'basic' | 'sci' */
 
-  /* ---------- 词法：把字符串切成 token ---------- */
+  /* ================= 科学模式：解析器（沿用 Step 15 实现） ================= */
+
   const FUNCS = {
     sin: Math.sin, cos: Math.cos, tan: Math.tan,
     asin: Math.asin, acos: Math.acos, atan: Math.atan,
@@ -48,6 +38,31 @@
   };
   const CONSTS = { 'π': Math.PI, 'e': Math.E };
 
+  /* 输入阶段的宽松校验：白名单从 FUNCS / CONSTS 真实名单生成 */
+  const ALLOWED_CH = (() => {
+    const s = new Set('0123456789+-*/%^().! \t\n×÷−√π');
+    Object.keys(FUNCS).forEach(f => { for (const ch of f) s.add(ch); });
+    s.add('e'); s.add('E');
+    return s;
+  })();
+
+  function isPartialValid(expr) {
+    for (const ch of String(expr)) if (!ALLOWED_CH.has(ch)) return false;
+    return true;
+  }
+
+  /* 点「＝」时自动补全未闭合的右括号 */
+  function autoClose(expr) {
+    let open = 0;
+    for (const ch of expr) {
+      if (ch === '(') open++;
+      else if (ch === ')') open--;
+    }
+    let out = expr;
+    while (open > 0) { out += ')'; open--; }
+    return out;
+  }
+
   function tokenize(src) {
     const out = [];
     let i = 0;
@@ -55,7 +70,6 @@
     while (i < s.length) {
       const ch = s[i];
       if (ch === ' ' || ch === '\t' || ch === '\n' || ch === '　') { i++; continue; }
-      /* 数字：小数 / 科学计数(1e3) */
       if (/[0-9.]/.test(ch)) {
         let j = i;
         while (j < s.length && /[0-9.]/.test(s[j])) j++;
@@ -72,13 +86,10 @@
         i = j;
         continue;
       }
-      /* 标识符：函数名 / 常量（π e）*/
       if (/[A-Za-zπ]/.test(ch)) {
         let j = i;
         while (j < s.length && /[A-Za-zπ]/.test(s[j])) j++;
         const name = s.slice(i, j);
-        /* 小写化会让 E 被当常量 e：科学计数已在数字分支处理完，
-           这里的裸字母按「区分大小写」匹配，sin 不能写成 SIN。*/
         if (Object.prototype.hasOwnProperty.call(CONSTS, name)) out.push({ t: 'num', v: CONSTS[name] });
         else if (Object.prototype.hasOwnProperty.call(FUNCS, name)) out.push({ t: 'fn', v: FUNCS[name], name: name });
         else throw new Error('无法识别的符号：' + name);
@@ -90,13 +101,11 @@
       if (ch === '−') { out.push({ t: 'op', v: '-' }); i++; continue; }
       if (ch === '√') { out.push({ t: 'op', v: '√' }); i++; continue; }
       if ('+-*/%^()!'.indexOf(ch) >= 0) { out.push({ t: 'op', v: ch }); i++; continue; }
-      /* ★ 走到这里说明出现了白名单外的字符（字母数字函数常量运算符之外的） */
       throw new Error('表达式包含不允许的字符：' + ch);
     }
     return out;
   }
 
-  /* ---------- 语法：递归下降 ---------- */
   function evaluate(src) {
     const text = String(src == null ? '' : src).trim();
     if (!text) throw new Error('请输入表达式');
@@ -112,8 +121,6 @@
       return false;
     }
 
-    /* 前缀 √：不吃掉括号部分，把整个主项包一层sqrt —— √9+1 按 (√9)+1 处理，
-       因为 √ 是一元前缀、优先级高于加减。 */
     function parseExpr() {
       let v = parseTerm();
       for (;;) {
@@ -134,6 +141,9 @@
           const d = parseUnary();
           if (d === 0) throw new Error('除数不能为 0');
           v %= d;
+        } else if (peek() && (peek().t === 'num' || peek().t === 'fn' || (peek().t === 'op' && peek().v === '('))) {
+          /* 隐式乘法：2π、3(4+1)、2sin(30) 这类连写按乘法处理 */
+          v *= parseUnary();
         } else return v;
       }
     }
@@ -147,7 +157,6 @@
       const base = parsePostfix();
       if (peek() && peek().t === 'op' && peek().v === '^') {
         p++;
-        /* 右结合且指数允许一元负号：2^3^2 = 2^9，(-2)^2 = 4 */
         return Math.pow(base, parseUnary());
       }
       return base;
@@ -167,12 +176,14 @@
       if (t.t === 'fn') {
         p++;
         if (!eatOp('(')) throw new Error(t.name + ' 需要括号，如 ' + t.name + '(x)');
+        if (peek() && peek().t === 'op' && peek().v === ')') throw new Error(t.name + ' 缺少参数');
         const arg = parseExpr();
         if (!eatOp(')')) throw new Error(t.name + ' 缺少右括号');
         return t.v(arg);
       }
       if (t.t === 'op' && t.v === '(') {
         p++;
+        if (peek() && peek().t === 'op' && peek().v === ')') throw new Error('括号内缺少表达式');
         const v = parseExpr();
         if (!eatOp(')')) throw new Error('括号不匹配');
         return v;
@@ -202,49 +213,33 @@
   /* ---------- 显示 ---------- */
   function fmt(n) {
     if (!isFinite(n)) return '—';
-    /* 浮点误差抹平：0.1+0.2 在IEEE754 下是 0.30000000000000004 */
     const r = Math.round(n * 1e10) / 1e10;
     if (Number.isInteger(r)) return String(r);
-    if (Math.abs(r) >= 1e-9 && Math.abs(r) < 1e-6) return r.toExponential(6).replace('e', 'e');
     return String(r);
   }
+
+  /* ---------- 历史（两种模式共用，最近 10 条，点击回填） ---------- */
 
   function pushHist(expr, res) {
     const line = expr + ' = ' + res;
     if (hist[0] === line) return;
     hist.unshift(line);
-    if (hist.length > 30) hist.length = 30;
+    if (hist.length > HIST_MAX) hist.length = HIST_MAX;
     LB.storage.set(KEY, hist);
-  }
-
-  function run() {
-    const expr = $('#scExpr', rootEl).value;
-    const out = $('#scOut', rootEl);
-    try {
-      const v = evaluate(expr);
-      out.textContent = fmt(v);
-      out.classList.remove('err');
-      pushHist(expr, fmt(v));
-    } catch (e) {
-      out.textContent = e && e.message ? e.message : '表达式不合法';
-      out.classList.add('err');
-      LB.toast('表达式不合法', 'err');
-    }
-    renderHist();
   }
 
   function renderHist() {
     const box = $('#scHist', rootEl);
+    if (!box) return;
     if (!hist.length) {
-      /* Step 8：标准空状态 */
       LB.ui.empty(box, {
         icon: '🧮',
         title: '还没有计算记录',
-        sub: '算过的式子会自动留在这里，点一下即可复用'
+        sub: '算过的式子会自动留在这里，点一下即可回填'
       });
       return;
     }
-    box.innerHTML = hist.slice(0, 12).map(h => {
+    box.innerHTML = hist.slice(0, HIST_MAX).map(h => {
       const i = h.lastIndexOf(' = ');
       const e = h.slice(0, i), r = h.slice(i + 3);
       return '<button class="sc-h" type="button" data-e="' + LB.dom.esc(e) + '">' +
@@ -252,17 +247,167 @@
     }).join('');
   }
 
-  /* 按钮表：每项 [标签, 追加到表达式的文本, 提示, 类名]
-     键用data-k，标签与键分开是为了让按钮显示 √ 而不是代码里的 sqrt。 */
-  const KEYS = [
+  /* ================= 基础模式：即算状态机 ================= */
+
+  const bc = { acc: null, op: null, entry: '', justEq: false };
+  const OP_SYM = { '+': '+', '-': '−', '*': '×', '/': '÷' };
+
+  function bcCalc(a, op, b) {
+    let r;
+    if (op === '+') r = a + b;
+    else if (op === '-') r = a - b;
+    else if (op === '*') r = a * b;
+    else if (op === '/') r = b === 0 ? NaN : a / b;
+    else r = b;
+    return r;
+  }
+
+  function bcEntryVal() { return bc.entry !== '' ? parseFloat(bc.entry) : (bc.acc !== null ? bc.acc : 0); }
+
+  function bcShow(text, isErr) {
+    const out = $('#bcOut', rootEl);
+    const sub = $('#bcSub', rootEl);
+    if (out) {
+      out.textContent = text;
+      out.classList.toggle('err', !!isErr);
+    }
+    if (sub) sub.textContent = (bc.acc !== null && bc.op) ? (fmt(bc.acc) + ' ' + OP_SYM[bc.op]) : '';
+    /* 待运算符高亮 */
+    $$('.sc-pad-basic .sc-k', rootEl).forEach(b => {
+      b.classList.toggle('on', !!bc.op && b.dataset.k === bc.op);
+    });
+  }
+
+  function bcRender() {
+    if (bc.entry !== '') bcShow(bc.entry);
+    else if (bc.acc !== null) bcShow(fmt(bc.acc));
+    else bcShow('0');
+  }
+
+  function bcDigit(d) {
+    if (bc.justEq) { bc.acc = null; bc.op = null; bc.entry = ''; bc.justEq = false; }
+    if (d === '.') {
+      if (bc.entry.indexOf('.') > -1) return;
+      bc.entry = (bc.entry || '0') + '.';
+    } else {
+      if (bc.entry.replace('-', '').replace('.', '').length >= 15) return;
+      bc.entry = (bc.entry === '0') ? d : bc.entry + d;
+    }
+    bcRender();
+  }
+
+  function bcOp(op) {
+    const cur = bcEntryVal();
+    if (bc.op !== null && bc.entry !== '') {
+      /* 连续运算：先把上一步算掉（5 + 3 再按 × → 先得 8） */
+      const r = bcCalc(bc.acc, bc.op, cur);
+      if (!isFinite(r)) { bcShow('错误', true); bcReset(); return; }
+      bc.acc = r;
+      bcShow(fmt(r));
+    } else if (bc.acc === null) {
+      bc.acc = cur;
+    }
+    bc.op = op;
+    bc.entry = '';
+    bc.justEq = false;
+    bcRender();
+  }
+
+  function bcEq() {
+    if (bc.op === null) {
+      if (bc.entry !== '') { bc.acc = parseFloat(bc.entry); bc.entry = ''; }
+      bc.justEq = true;
+      bcRender();
+      return;
+    }
+    const cur = bcEntryVal();
+    const a = bc.acc;
+    const r = bcCalc(a, bc.op, cur);
+    if (!isFinite(r)) { bcShow('错误', true); LB.toast('除数不能为 0', 'err'); bcReset(); return; }
+    const line = fmt(a) + ' ' + OP_SYM[bc.op] + ' ' + fmt(cur);
+    bc.acc = r; bc.entry = ''; bc.op = null; bc.justEq = true;
+    bcShow(fmt(r));
+    pushHist(line, fmt(r));
+    renderHist();
+  }
+
+  function bcPercent() {
+    const v = bcEntryVal() / 100;
+    if (bc.entry !== '' || bc.acc === null) bc.entry = String(v);
+    else bc.acc = v;
+    bcRender();
+  }
+
+  function bcNeg() {
+    if (bc.entry !== '') {
+      bc.entry = bc.entry.charAt(0) === '-' ? bc.entry.slice(1) : '-' + bc.entry;
+    } else if (bc.acc !== null) {
+      bc.entry = String(-bc.acc);
+      bc.acc = null;
+    } else {
+      bc.entry = '-';
+    }
+    bcRender();
+  }
+
+  function bcBack() {
+    if (bc.justEq) return;
+    bc.entry = bc.entry.slice(0, -1);
+    bcRender();
+  }
+
+  function bcReset() {
+    bc.acc = null; bc.op = null; bc.entry = ''; bc.justEq = false;
+    bcRender();
+  }
+
+  /* ================= 科学模式：表达式输入 ================= */
+
+  function sciOnInput() {
+    if (!rootEl) return;
+    const v = $('#scExpr', rootEl).value;
+    const out = $('#scOut', rootEl);
+    if (!v.trim()) { out.textContent = '0'; out.classList.remove('err'); return; }
+    if (!isPartialValid(v)) {
+      out.textContent = '表达式包含不允许的字符';
+      out.classList.add('err');
+      return;
+    }
+    if (out.classList.contains('err')) out.textContent = '按 ＝ 计算';
+    out.classList.remove('err');
+  }
+
+  function sciRun() {
+    const inp = $('#scExpr', rootEl);
+    const out = $('#scOut', rootEl);
+    const raw = inp.value;
+    if (!raw.trim()) { out.textContent = '0'; out.classList.remove('err'); return; }
+    const expr = autoClose(raw);
+    try {
+      const v = evaluate(expr);
+      if (expr !== raw) inp.value = expr;
+      out.textContent = fmt(v);
+      out.classList.remove('err');
+      pushHist(expr, fmt(v));
+    } catch (e) {
+      const msg = (e && e.message) ? e.message : '表达式不合法';
+      out.textContent = msg;
+      out.classList.add('err');
+      LB.toast(msg, 'err');
+    }
+    renderHist();
+  }
+
+  /* 按钮表：每项 [标签, 动作, 提示, 类名]（动作：字符串 = 追加文本，其它为指令） */
+  const SCI_KEYS = [
     ['sin', 'sin(', 'sin(', 'fn'], ['cos', 'cos(', 'cos(', 'fn'], ['tan', 'tan(', 'tan(', 'fn'],
     ['(', '(', '左括号', 'op'], [')', ')', '右括号', 'op'],
 
-    ['log', 'log(', 'log(', 'fn'], ['ln', 'ln(', 'ln(', 'fn'], ['√', '√(', '开方（自动补右括号）', 'op'],
-    ['x²', '^2', '平方', 'op'], ['x^y', '^', '幂运算', 'op'],
+    ['log', 'log(', 'log 常用对数', 'fn'], ['ln', 'ln(', 'ln 自然对数', 'fn'], ['√', '√(', '开方（自动补右括号）', 'op'],
+    ['x²', '^2', '平方', 'op'], ['xʸ', '^', '幂运算', 'op'],
 
     ['π', 'π', '圆周率', 'fn'], ['e', 'e', '自然常数', 'fn'], ['!', '!', '阶乘', 'op'],
-    ['%', '%', '取余', 'op'], ['C', 'clear', '清空', 'act'],
+    ['%', '%', '取余', 'op'], ['C', 'clrExpr', '清空表达式', 'act'],
 
     ['7', '7', '', 'num'], ['8', '8', '', 'num'], ['9', '9', '', 'num'],
     ['÷', '÷', '除', 'op'], ['⌫', 'back', '退格', 'act'],
@@ -273,51 +418,86 @@
     ['1', '1', '', 'num'], ['2', '2', '', 'num'], ['3', '3', '', 'num'],
     ['−', '−', '减', 'op'], ['=', '=', '计算', 'eq'],
 
-    ['0', '0', '', 'num'], ['.', '.', '小数点', 'num'], ['±', 'neg', '正负取反', 'act'],
+    ['±', 'neg', '正负取反', 'act'], ['0', '0', '', 'num'], ['.', '.', '小数点', 'num'],
     ['+', '+', '加', 'op']
   ];
 
-  function press(k) {
+  /* 基础模式 4×5 键盘：[标签, 动作, 提示, 类名] */
+  const BASIC_KEYS = [
+    ['⌫', 'back', '退格', 'act'], ['AC', 'clear', '全部清空', 'act'], ['%', 'percent', '百分比', 'act'], ['÷', '/', '除', 'op'],
+    ['7', '7', '', 'num'], ['8', '8', '', 'num'], ['9', '9', '', 'num'], ['×', '*', '乘', 'op'],
+    ['4', '4', '', 'num'], ['5', '5', '', 'num'], ['6', '6', '', 'num'], ['−', '-', '减', 'op'],
+    ['1', '1', '', 'num'], ['2', '2', '', 'num'], ['3', '3', '', 'num'], ['+', '+', '加', 'op'],
+    ['±', 'neg', '正负取反', 'act'], ['0', '0', '', 'num'], ['.', '.', '小数点', 'num'], ['=', '=', '计算', 'eq']
+  ];
+
+  function keyHTML(list, cls) {
+    return list.map(k => '<button class="sc-k sc-' + k[3] + '" type="button" data-k="' + LB.dom.esc(k[1]) + '"' +
+      (k[2] ? ' title="' + LB.dom.esc(k[2]) + '"' : '') + ' aria-label="' + LB.dom.esc(k[0]) + '">' +
+      LB.dom.esc(k[0]) + '</button>').join('');
+  }
+
+  function sciPress(k) {
     const inp = $('#scExpr', rootEl);
     const v = inp.value;
-    if (k === 'clear') { inp.value = ''; }
+    if (k === '=') { sciRun(); return; }
+    if (k === 'clear') { inp.value = ''; $('#scOut', rootEl).textContent = '0'; }
+    else if (k === 'clrExpr') { inp.value = ''; }
     else if (k === 'back') { inp.value = v.slice(0, -1); }
     else if (k === 'neg') {
-      /* 正负取反：光标前是数字就包括号，否则在最前面加负号 */
       const m = v.match(/(-?\d*\.?\d+)$/);
       if (m) inp.value = v.slice(0, v.length - m[1].length) + '(-' + m[1] + ')';
       else inp.value = v ? '-(' + v + ')' : '-';
     } else {
       inp.value = v + k;
     }
-    if (k !== '=') run();
+    sciOnInput();
+  }
+
+  /* ================= 视图 ================= */
+
+  function setMode(m) {
+    mode = m;
+    $$('.calc-seg > button', rootEl).forEach(b => b.classList.toggle('on', b.dataset.mode === m));
+    const b = $('#scBasic', rootEl), s = $('#scSci', rootEl);
+    if (b) b.hidden = m !== 'basic';
+    if (s) s.hidden = m !== 'sci';
+    try { LB.storage.set('litebox_calc_mode', m); } catch (_) {}
   }
 
   function html() {
     return (
       '<div class="tool-head">' +
       '<button class="back" data-back type="button" aria-label="返回"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 5.5 8 12l6.5 6.5"/></svg></button>' +
-      '<div><h1>科学计算器</h1><p>四则、括号、三角函数、对数、阶乘、幂运算</p></div>' +
+      '<div><h1>计算器</h1><p>基础四则与科学函数双模式，科学模式支持表达式与历史回填</p></div>' +
       '</div>' +
       '<div class="tool-body">' +
-      '<div class="card sc-screen">' +
+      '<div class="seg calc-seg" role="tablist">' +
+      '<button type="button" data-mode="basic" class="on">🧮 基础</button>' +
+      '<button type="button" data-mode="sci">🔬 科学</button>' +
+      '</div>' +
+
+      /* —— 基础模式 —— */
+      '<div class="card sc-screen" id="scBasic">' +
+      '<div class="sc-sub mono" id="bcSub"></div>' +
+      '<div class="sc-big mono" id="bcOut">0</div>' +
+      '<div class="sc-pad sc-pad-basic">' + keyHTML(BASIC_KEYS, 'basic') + '</div>' +
+      '</div>' +
+
+      /* —— 科学模式 —— */
+      '<div class="card sc-screen" id="scSci" hidden>' +
       '<input class="sc-expr mono" id="scExpr" type="text" inputmode="text" placeholder="输入表达式，如sin(π/2)" aria-label="表达式" spellcheck="false">' +
       '<div class="sc-out mono" id="scOut">0</div>' +
+      '<div class="sc-pad sc-pad-sci">' + keyHTML(SCI_KEYS, 'sci') + '</div>' +
       '</div>' +
-      '<div class="sc-pad">' +
-      KEYS.map(k => '<button class="sc-k sc-' + k[3] + '" type="button" data-k="' + LB.dom.esc(k[1]) + '"' +
-        (k[2] ? ' title="' + LB.dom.esc(k[2]) + '"' : '') + ' aria-label="' + LB.dom.esc(k[0]) + '">' +
-        LB.dom.esc(k[0]) + '</button>').join('') +
-      '</div>' +
-      '<div class="set-btns">' +
-      '<button class="btn btn-main js-primary-submit" id="scGo" type="button">＝ 计算</button>' +
-      '</div>' +
+
       '<div class="tool-sec">' +
-      '<span class="tool-lab">计算记录</span>' +
+      '<span class="tool-lab">计算记录（点击回填）</span>' +
       '<div class="sc-hists" id="scHist"></div>' +
       '</div>' +
-      '<p class="cd-note">支持 sin/cos/tan/asin/acos/atan、log(常用对数)/ln(自然对数)、√、阶乘(!)、' +
-      '幂(^)、π、e，以及 ×÷− 符号键。表达式由内置解析器逐字符求值，不做字符串拼接执行。</p>' +
+      '<p class="cd-note">基础模式支持连续运算（5 + 3 = 8 后直接按 × 2 = 16）；科学模式支持 sin/cos/tan、' +
+      'log(常用对数)/ln(自然对数)、√、阶乘、幂、π、e，输入 sin( 这类未闭合式子不会报错，按 ＝ 自动补全右括号并计算。' +
+      '表达式由内置解析器逐字符求值，不做字符串拼接执行。</p>' +
       '</div>'
     );
   }
@@ -325,26 +505,59 @@
   function mount(root) {
     rootEl = root;
     root.innerHTML = html();
-    const saved = LB.storage.get(KEY, []);
-    hist = Array.isArray(saved) ? saved.filter(x => typeof x === 'string').slice(0, 30) : [];
+
+    /* 历史：新键优先，旧键迁移 */
+    const saved = LB.storage.get(KEY, null);
+    if (Array.isArray(saved)) hist = saved.filter(x => typeof x === 'string').slice(0, HIST_MAX);
+    else {
+      const legacy = LB.storage.get(KEY_LEGACY, []);
+      hist = Array.isArray(legacy) ? legacy.filter(x => typeof x === 'string').slice(0, HIST_MAX) : [];
+    }
     renderHist();
 
-    /* 键盘：数字与运算符可直接敲，回车计算 */
-    const inp = $('#scExpr', root);
-    inp.addEventListener('keydown', e => {
-      if (e.key === 'Enter') { e.preventDefault(); run(); }
+    /* 模式切换（记住上次选择） */
+    $$('.calc-seg > button', root).forEach(b => b.addEventListener('click', () => setMode(b.dataset.mode)));
+    const last = LB.storage.get('litebox_calc_mode', 'basic');
+    setMode(last === 'sci' ? 'sci' : 'basic');
+
+    /* —— 基础模式键盘 —— */
+    $('.sc-pad-basic', root).addEventListener('click', e => {
+      const btn = e.target.closest('.sc-k');
+      if (!btn) return;
+      const k = btn.dataset.k;
+      if (k === '=') bcEq();
+      else if (k === 'clear') bcReset();
+      else if (k === 'back') bcBack();
+      else if (k === 'neg') bcNeg();
+      else if (k === 'percent') bcPercent();
+      else if ('+-*/'.indexOf(k) > -1 && k.length === 1) bcOp(k);
+      else bcDigit(k);
     });
-    $('#scGo', root).addEventListener('click', e => { if (!LB.lock(e.currentTarget)) return; run(); });
-    $('.sc-pad', root).addEventListener('click', e => {
-      const b = e.target.closest('.sc-k');
-      if (!b || !b.dataset.k && b.dataset.k !== '') return;
-      press(b.dataset.k);
+
+    /* —— 科学模式键盘 + 键盘输入 —— */
+    const inp = $('#scExpr', root);
+    inp.addEventListener('input', sciOnInput);
+    inp.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); sciRun(); }
+    });
+    $('.sc-pad-sci', root).addEventListener('click', e => {
+      const btn = e.target.closest('.sc-k');
+      if (!btn) return;
+      sciPress(btn.dataset.k);
     });
     $('#scHist', root).addEventListener('click', e => {
       const b = e.target.closest('.sc-h');
       if (!b) return;
-      inp.value = b.dataset.e;
-      run();
+      /* 历史同时兼容两种模式：基础模式回填数值，科学模式回填表达式 */
+      const expr = b.dataset.e;
+      if (mode === 'basic') {
+        const i = expr.lastIndexOf(' = ');
+        const r = i > -1 ? expr.slice(i + 3) : expr;
+        if (isFinite(+r)) { bc.acc = +r; bc.entry = ''; bc.op = null; bc.justEq = true; bcRender(); }
+        return;
+      }
+      inp.value = expr;
+      sciOnInput();
     });
     root.addEventListener('click', e => {
       if (e.target.closest('[data-back]')) LB.hash.go('home');

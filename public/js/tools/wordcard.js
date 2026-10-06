@@ -10,12 +10,19 @@
  *   但如果known 是一个只增不减的数组，学完一轮后第二轮就没有新词可背了。
  *   所以这里把 known 存成 { '2026-10-04': ['abandon', ...] }按天分桶：
  *   今天认识的词今天不再出现，明天再复习。lastIndex 也按天存。
+ *
+ * 【Step 12 · B5：多词库】
+ *   新增 六级 / 考研 / 雅思 三个词库，**每个词库的进度独立保存** ——
+ *   存储键从固定的 litebox_wordcard 改为 litebox_wordcard_<libKey>，
+ *   切换词库就是换一个键，互不干扰。
+ *   旧的 litebox_wordcard（只有四级）在首次进入时自动迁移到四级那一份。
  */
 (function () {
   'use strict';
 
   const { $, $$ } = LB.dom;
-  const KEY = 'litebox_wordcard';
+  const KEY_BASE = 'litebox_wordcard_';   /* 实际键 = KEY_BASE + libKey */
+  const KEY_OLD = 'litebox_wordcard';     /* Step 12 之前的单库键，用于一次性迁移 */
   const SEED_CSV = 'litebox_csv_seed';
 
   let rootEl = null;
@@ -25,11 +32,24 @@
   let cursor = 0;           /* 当前词在「今日队列」里的下标 */
   let queue = [];           /* 今日待背的词对象数组 */
 
+  /* 词库清单：k 是 LB.dict 的挂载名（core/dict.js 的 FILE 表负责映射到文件名） */
   const LIBS = [
     { k: 'wordsCET4', name: '四级 CET-4' },
-    { k: 'wordsCET6', name: '六级 CET-6（即将上线）', disabled: true },
-    { k: 'wordsKY', name: '考研（即将上线）', disabled: true }
+    { k: 'wordsCET6', name: '六级 CET-6' },
+    { k: 'wordsKY', name: '考研核心' },
+    { k: 'wordsIELTS', name: '雅思 IELTS' }
   ];
+
+  function stateKey() { return KEY_BASE + libKey; }
+
+  /* 一次性迁移：老版本只有四级，把老键搬到四级那一份里 */
+  function migrateOldState() {
+    const old = LB.storage.get(KEY_OLD, null);
+    if (old && typeof old === 'object' && old.known && !LB.storage.get(KEY_BASE + 'wordsCET4', null)) {
+      LB.storage.set(KEY_BASE + 'wordsCET4', old);
+    }
+    if (old) LB.storage.remove(KEY_OLD);
+  }
 
   function today() {
     const d = new Date();
@@ -37,11 +57,11 @@
   }
 
   function loadState() {
-    const s = LB.storage.get(KEY, null);
+    const s = LB.storage.get(stateKey(), null);
     if (s && typeof s === 'object' && s.known) return s;
     return { known: {}, unknown: [], idx: {}, done: {} };
   }
-  function saveState(s) { LB.storage.set(KEY, s); }
+  function saveState(s) { LB.storage.set(stateKey(), s); }
 
   /* 今日认识的词（当天不再出现） */
   function knownToday(s) { return s.known[today()] || []; }
@@ -95,9 +115,12 @@
     const n = cursor + 1;
     $('#wcNum', rootEl).textContent = n + ' / ' + queue.length;
     $('#wcWord', rootEl).textContent = it.w;
-    $('#wcPhon', rootEl).textContent = it.p;
-    $('#wcMeaning', rootEl).textContent = it.m;
-    $('#wcExample', rootEl).textContent = it.e;
+    $('#wcPhon', rootEl).textContent = it.p || '';
+    $('#wcMeaning', rootEl).textContent = it.m || '';
+    /* 例句是可选的：缺例句时留空并整行隐藏，不能把 undefined 渲染到页面上 */
+    const ex = $('#wcExample', rootEl);
+    ex.textContent = it.e || '';
+    ex.hidden = !it.e;
     setFlipped(false);
   }
 
@@ -200,29 +223,56 @@
     LB.hash.go('csvtab');
   }
 
-  function switchLib(k) {
-    const conf = LIBS.find(x => x.k === k);
-    if (!conf || conf.disabled) { LB.toast('该词库正在整理中，先用四级吧', 'info'); return; }
+  /* Step 12 · B5：切换词库 = 换一套独立进度 + 重新加载字典。
+     加载期间先清空当前卡片，避免旧词库的卡片和新词库的进度对不上。 */
+  function loadLib(k) {
+    if (!LIBS.some(x => x.k === k)) return;
     libKey = k;
-    cursor = 0; flipped = false;
-    buildQueue();
-    renderCard();
+    cursor = 0; flipped = false; queue = []; list = [];
+
+    const empty = $('#wcEmpty', rootEl);
+    if (empty) { empty.hidden = false; empty.textContent = '词库加载中…'; }
+    if ($('#wcCard', rootEl)) $('#wcCard', rootEl).hidden = true;
+    if ($('#wcBtns', rootEl)) $('#wcBtns', rootEl).hidden = true;
+    if ($('#wcNum', rootEl)) $('#wcNum', rootEl).textContent = '';
     renderProgress();
     renderWordbook();
+
+    LB.dict.load(k)
+      .then(d => {
+        /* 词库是异步加载的，用户可能已经切走页面或又换了词库 —— 直接放弃这次渲染 */
+        if (!rootEl || libKey !== k) return;
+        list = Array.isArray(d) ? d : [];
+        if (!list.length) {
+          if (empty) { empty.hidden = false; empty.textContent = '词库为空。'; }
+          LB.toast('词库加载失败', 'err');
+          return;
+        }
+        if (empty) empty.hidden = true;
+        buildQueue();
+        renderCard();
+        renderProgress();
+        renderWordbook();
+      })
+      .catch(e => {
+        if (!rootEl || libKey !== k) return;
+        if (empty) { empty.hidden = false; empty.textContent = '词库加载失败。'; }
+        /* ★ 把原始错误带出来。之前这里只写「词库加载失败」，结果渲染层的 TypeError
+           （比如模板缺 id）也被当成加载失败报，排查时完全被误导。 */
+        LB.toast('词库加载失败：' + (e && e.message ? e.message : '未知错误'), 'err');
+      });
   }
 
   function html() {
     return (
       '<div class="tool-head">' +
       '<button class="back" data-back type="button" aria-label="返回"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 5.5 8 12l6.5 6.5"/></svg></button>' +
-      '<div><h1>背单词</h1><p>四级高频词卡片记忆，翻牌看释义，生词本本机保存</p></div>' +
+      '<div><h1>背单词</h1><p>四级 / 六级 / 考研 / 雅思词库卡片记忆，翻牌看释义，生词本本机保存</p></div>' +
       '</div>' +
       '<div class="tool-body">' +
       '<div class="wc-top">' +
       '<select class="inp" id="wcLib" aria-label="词库选择">' +
-      '<option value="wordsCET4" selected>四级 CET-4</option>' +
-      '<option value="wordsCET6" disabled>六级 CET-6（即将上线）</option>' +
-      '<option value="wordsKY" disabled>考研（即将上线）</option>' +
+      LIBS.map(x => '<option value="' + x.k + '"' + (x.k === libKey ? ' selected' : '') + '>' + x.name + '</option>').join('') +
       '</select>' +
       '<div class="wc-prog">' +
       '<div class="wc-prog-bar"><div class="wc-prog-fill" id="wcFill"></div></div>' +
@@ -278,7 +328,7 @@
     $('#wcNo', root).addEventListener('click', markUnknown);
     $('#wcSkip', root).addEventListener('click', skip);
     $('#wcExport', root).addEventListener('click', exportCsv);
-    $('#wcLib', root).addEventListener('change', e => switchLib(e.target.value));
+    $('#wcLib', root).addEventListener('change', e => loadLib(e.target.value));
     $('#wcBook', root).addEventListener('click', e => {
       const b = e.target.closest('.wc-rm');
       if (b) removeUnknown(b.dataset.w);
@@ -287,26 +337,8 @@
       if (e.target.closest('[data-back]')) LB.hash.go('home');
     });
 
-    LB.dict.load(libKey)
-      .then(d => {
-        /* 词库是异步加载的，用户可能已经切走页面 —— 此时 rootEl 已置空，
-           再往下渲染会写到已卸载的节点上。直接放弃渲染即可。 */
-        if (!rootEl) return;
-        list = Array.isArray(d) ? d : [];
-        if (!list.length) { $('#wcEmpty', rootEl).hidden = false; LB.toast('词库加载失败', 'err'); return; }
-        buildQueue();
-        renderCard();
-        renderProgress();
-        renderWordbook();
-      })
-      .catch(e => {
-        if (!rootEl) return;
-        $('#wcEmpty', rootEl).hidden = false;
-        /* ★ 把原始错误带出来。之前这里只写「词库加载失败」，结果渲染层的 TypeError
-           （比如模板缺 id）也被当成加载失败报，排查时完全被误导 —— 加载成功但渲染崩了，
-           用户看到的却是「词库加载失败」。 */
-        LB.toast('词库加载失败：' + (e && e.message ? e.message : '未知错误'), 'err');
-      });
+    migrateOldState();
+    loadLib(libKey);
   }
 
   function unmount() {

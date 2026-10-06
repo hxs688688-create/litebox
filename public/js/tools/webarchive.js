@@ -172,7 +172,7 @@
       '<a class="btn btn-ghost btn-sm wa-fb" id="waArq" href="#" target="_blank" rel="noopener">🗂️ 打开 Arquivo.pt</a>' +
       '</div>' +
       '</div>' +
-      '<p class="cd-note">快照数据来自 web.archive.org 与 Arquivo.pt；查询时自动去掉参数部分以便命中更多存档。</p>' +
+      '<p class="cd-note">查询时会自动去掉网址里的参数部分，以便命中更多存档快照。</p>' +
       '</div>'
     );
   }

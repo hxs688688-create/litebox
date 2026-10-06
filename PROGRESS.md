@@ -1372,3 +1372,1170 @@ const d = window.LB.dict[name];          /* ←按挂载名取，不是文件名
 - jobvalue：10000/5天/8h/无通勤/无加班 → 高分（A/S）✅；5000/6天/10h/通勤3h/加班40h → 低分（C/D）✅；
   点分享生成分享图 ✅
 - hotlist：切「影视」→ 显示豆瓣热门电影 ✅（接口 `60s.viki.moe/v2/douban/weekly/movie` 实测有数据）
+
+---
+
+# Step 11 — 首页布局重构 + 7 项问题修复
+
+红线复核：复制一律 `LB.copyNow` ✅；`!important` 仅存在于 `base.css`（2 处 `[hidden]` +
+`prefers-reduced-motion`）✅；无内联样式（仅 JS 下发 CSS 变量）✅；`tokens.css` 之外无硬编码颜色 ✅；
+界面无任何「数据来源」标注 ✅。
+
+## 一、Part A · 首页布局重构
+
+| 项 | 做法 |
+|---|---|
+| A1 | 删掉 `.hero` 整块（`<h1>` 大标题 + 两行简介 `<p>`），连同 `header.hero` 的重置规则 |
+| A2 | 徽章移到搜索框上方（`.home-badge-row`），副标题并进同一行，字号 12px |
+| A3 | `.search-wrap` 改 `position:sticky; top:var(--head-h); z-index:60` + `--bg` 底 + 下边框 |
+| A4 | 区块顺序：徽章行 → 搜索框 → 最近使用 → 今日诗词 + 热搜 → 分类 chips → 工具网格 |
+| A5 | 最近使用默认 6 条 + 尾部「展开全部 N 条 / 收起」，空记录时整块不渲染 |
+| A6 | `home.js` 的 `_shortDesc()` 把卡片 desc 截到 12 字 + `…`（registry / 工具页不动） |
+| A7 | 收藏空态改用标准 `empty-state`（`es-icon / es-title / es-sub`，与 `ui/empty.js` 同一套类名） |
+| A8 | `setupScrollSync` 的 probe 与 `scrollToCat` 的落点都补上吸顶搜索条高度 |
+
+**两处必须说明的实现细节：**
+
+1. **分类条必须跟着搜索框下移。** 搜索框吸顶后，`.home-cat-nav` 若仍停在
+   `top:var(--head-h)` 就会被搜索框盖住、放大镜不可见。故其 top 改为
+   `calc(var(--head-h) + var(--search-h,64px))`，`--search-h` 由 `syncSearchH()`
+   实测写入（写死 px 会在系统字体不同的机型错位）。
+2. **徽章必须允许换行。** A2 把副标题并进徽章后，整句在 375px 下宽约 438px，
+   若保留 Step 5D 的 `white-space:nowrap` 会直接撑出横向滚动条（实测溢出 84px）。
+   改为 `display:inline-block; max-width:100%`，窄屏自然折两行，宽屏仍是一行。
+
+## 二、Part B · 7 项问题修复
+
+### B1 壁纸换主源为 wp.upx8.com
+- `functions/api/wallpaper.js`：降级链改为 **upx8 → Wallhaven → Picsum**，
+  新增 `tryUpx8(cat, page, size)`（category 映射：featured/nature→nature、beauty→girl 等）。
+- **实测三点**（决定了实现）：`category=` 形式可用且与 `content=` 返回同结构；
+  `width/height` 恒为 0（尺寸只在 `resolution` 字符串里）；`title` 恒为空字符串。
+- 保留同源代理：upx8 返回的是 **http://** 的阿里云 CDN 地址，https 页面直连会被混合内容拦截，
+  且原图 1.18MB，必须走 `/api/wallpaper-image?src=` + `?x-oss-process=resize` 出缩略图
+  （实测大图 462KB / 缩略图 108KB，**4.3 倍**）。
+- 前端 `wallpaper.js` 拿到 JSON 后先 `preloadThumbs()` 预加载前 4 张（4s 超时兜底），
+  完成再渲染网格，消除「先铺空框再一张张跳出来」的闪烁。
+
+### B2 经纬度获取当前位置
+- 新增「📍 获取当前位置」按钮：`geolocation.getCurrentPosition` → 先落坐标
+  （城市名是顺带的，反向地理编码失败也不影响主流程）→ 再补城市。
+- 结果同时写进 `#geoLoc`（`纬度 x · 经度 y · 城市`）与当前维度的输入框，三格式照常联动。
+- 失败分支走 `LB.fail('定位', …)`；按钮在请求期间禁用并显示「定位中…」。
+- 按仓库约定**不用 `?.`**（ES2017 写法 `(d && d.address) || {}`），与既有风格一致。
+
+### B3 文档校正图片不显示（根因在 CSS，不在 JS）
+- **真根因**：`tools.css` 的 `.ds-canvas-wrap canvas{background:var(--card2)}`（特异性 0,1,1）
+  会给容器里**每一个** canvas 涂上不透明底色，而覆盖层 canvas（`.ds-overlay`，z-index:1）
+  正好压在源图 canvas 上 —— 整块纯色把源图盖住，用户看到的就是空白卡片。
+  `.ds-overlay`（0,1,0）特异性更低，压不过它。
+- 修法：新增 `.ds-canvas-wrap canvas.ds-overlay{background:transparent;border:0}`（0,2,1）。
+- 同时按任务书加固 `docscan.js`：canvas 尺寸用**属性**设置、`drawImage` 传 4 参数、
+  源图 canvas 就位后再建覆盖层与四角手柄，并对「容器刚脱离 hidden、clientWidth 仍为 0」
+  的竞态做 rAF 重试（最多 5 次）。
+
+### B4 GIF 制作加 3 个模式（共 4 个）
+- `.seg` 四模式：📷 多图合成 / 🎬 视频转 GIF / 🖼️ GIF 转图片 / 🎥 GIF 转视频。
+- 视频转 GIF：等 `loadedmetadata` 后按 `起始时间 + 时长 × 帧率` 逐帧 seek + `drawImage`
+  → `gif.addFrame`。seek 带 1.5s 超时兜底（部分无关键帧的 webm 不触发 `seeked`）。
+- GIF 转图片 / 转视频：`decodeGif()` 用 **gifuct-js** 解析，按 GIF 规范把每帧补丁叠加到
+  持续画布上（含 `disposal=2` 清除），导出的是「每帧最终看到的画面」而不是局部补丁。
+- GIF 转视频用 `canvas.captureStream` + `MediaRecorder`，按 vp9 → vp8 → webm → mp4
+  顺序探测编码器，都不支持时明确提示。
+- 新增 `public/vendor/gifuct-js.min.js`（**18.4KB**）：把 gifuct-js 2.1.2 与
+  js-binary-schema-parser 2.0.3 的 CommonJS 源码用自建 mini-require 打成一个 IIFE，
+  挂 `window.GIFUCT`（npm 包本身没有浏览器构建产物）。已在 Node 里用真实 GIF
+  实测 `parseGIF` + `decompressFrames`（500×362 / 4 帧）。
+- 帧数上限 100、总像素超 4000 万自动等比缩小，防止大 GIF 拖死标签页。
+
+### B5 表情包改为模板制
+- 新增 `public/vendor/meme-templates/`：每个模板一对文件（JSON + SVG 底图），
+  共 熊猫头 / 猫猫头 / 蘑菇头 / 沙雕图 4 个模板 + 「自由模式」。
+- **渲染顺序是关键**：① 先把人脸按 cover 裁进模板人脸位 → ② 再盖底图
+  （底图的人脸位在 SVG 里用 `<mask>` 挖空）→ ③ 写字。顺序反了人脸会把耳朵盖住。
+- **人脸位必须按椭圆裁**：底图的洞是椭圆，若按矩形裁，矩形四角会从椭圆外露出来
+  （实测熊猫头 / 蘑菇头 / 沙雕图都能看到蓝色方块）。故 JSON 的 `face.shape` 标为
+  `ellipse`，代码按椭圆裁剪并各向外放 2px 盖住抗锯齿边缘。
+- 字体 / 字重 / 字号 / 描边宽度全部由模板 JSON 下发（「字体自动匹配模板风格」），
+  用户只输入顶部 / 底部文字。
+- 已用合成人脸图实拍 5 个模板逐一核对渲染结果。
+
+### B6 手持弹幕改造
+- 默认横向滚动：`.danmu-track{writing-mode:horizontal-tb; white-space:nowrap}`，
+  `@keyframes danmuScroll` 从 `translateX(100%)` 到 `-100%`。
+- 控制栏：文字颜色 / 背景色（两个 `input[type=color]`）、字号滑块 **24–200px**、
+  速度滑块 **慢 / 中 / 快**（1–3 档 → 16s / 10s / 6s）。
+- 新增模式切换：**滚动 / 固定居中**（固定态 `animation:none` + `translate(-50%,-50%)`）。
+- 颜色 / 字号 / 时长全部走 CSS 变量下发，改样式不重建 DOM、不打断正在跑的动画；
+  舞台高度 `clamp(140px, var(--dm-size)*2.1, 320px)` 跟着字号走。
+- 全屏态改为 `background:var(--danmu-bg,var(--stage-bg))`，尊重用户选的背景色。
+
+### B7 导航条正确贴底
+- `.tabbar` 按任务书改写：`bottom:0` + `width:fit-content` + `max-width:calc(100vw - 24px)`
+  + `border-radius:22px 22px 0 0`，安全区交给 `padding-bottom`。
+- **顺带清掉 `layout.css` 里历史遗留的 57 处 `!important`**（红线只允许 base.css 有）。
+  逐一核对：这些规则都是各自选择器的唯一定义（`.tabbar` / `.sheet` 仅在 layout.css 定义），
+  去掉强制优先级不改变计算值。
+
+## 三、红线修复（跨文件）
+
+`_injectTrust` 原先给 12 个联网工具打「📌 数据来源：xxx.com」页脚，另有 iplookup 的
+「数据来源」单元格 + 来源标签、webarchive / wallpaper 的 cd-note 文案，全部移除；
+`index.html` 里已失效的 `images.unsplash.com` preconnect 一并去掉。
+（`local` 类的「🔒 文件仅在本机浏览器内处理」声明保留 —— 那是隐私声明，不是来源标注。）
+
+## 四、验收自检（真实 Chrome headless，375×812，逐项断言）
+
+| 检查 | 结果 |
+|---|---|
+| A1–A8 首页八项 | **全部 PASS** |
+| B1–B7 七项 | **全部 PASS** |
+| 全站无「数据来源」标注（11 个联网/相关工具页逐页扫正文） | **0 命中** |
+| 375px 横向滚动（**遍历全部 114 个工具页**） | **0 个溢出** |
+| Console 报错 | 0（仅 2 条由沙箱屏蔽 nominatim 造成的网络超时，代码已优雅降级为只显示坐标） |
+
+**扫描过程中额外发现并修复的既有问题（不在任务书范围内，已单列）**：
+
+1. `biolab` 工具页在 375px 下溢出 38px —— 5 个 tab 走基础 `.seg`，按钮 `flex:1` 且
+   `white-space:nowrap`，总宽超容器后不收缩。已在 `tools.css` 用 `#blTabs` 让它内部横滚。
+2. `icon-192.png` / `icon-512.png` / `icon-maskable.png` 三个 PWA 图标缺失
+   （`index.html` 与 `manifest.json` 都引用了），每次打开都会在 Console 报 404。
+   已按 README 说明从 `icon.svg` 导出补齐（maskable 版做了安全区留白）。
+3. GIF 四模式标签在 375px 下总宽超容器约 40px，横滚会把第 4 个标签切在半路 ——
+   改为 2×2 网格，4 个模式全部完整可见。
+
+## 五、本轮验证方式（临时脚本，跑完即删）
+
+- 本地 Node 静态服务器（桩掉 `/api/*`）+ Chrome headless + CDP：
+  逐项断言布局 / 吸顶 / 折叠 / 截断 / 空态 / chip 联动 / 四模式切换 / 弹幕变量 / canvas 可见性。
+- `functions/api/wallpaper.js` 用真实网络跑：9 个分类 × 2 种尺寸 = 18 组，
+  **全部 source=upx8 / 10 张 / 已代理**；代理层实测取回真 JPEG（大图 462KB、缩略图 108KB），
+  非白名单域名与 http 协议均返回 400。
+- 全部改动文件 `node --check`（含 ESM 后端）语法通过。
+
+---
+
+# Step 12 — 首页精致化 + 7 项问题修复
+
+红线复核：复制一律 `LB.copyNow` ✅；`!important` 仅存在于 `base.css` ✅；无内联样式（仅 JS 下发 CSS 变量）✅；
+`tokens.css` 之外无硬编码颜色（新增 `--brand3 / --brand-grad-3 / --badge-shadow / --cup-*` 全部收口到 tokens）✅；
+界面无任何「数据来源」标注 ✅。
+
+## 一、Part A · 首页 hero 精致化（保留，不删除）
+
+Step 11 曾把 hero 整块删掉，Step 12 按任务书**恢复**并做压缩 + 精致化。删除方案作废。
+
+| 项 | 做法 |
+|---|---|
+| A1 | hero 恢复：徽章 + `<h1>轻工具箱 LiteBox</h1>` + 副标题 `<p>为学习与效率而生的小工具集。所有处理均在你自己的浏览器内完成。</p>` |
+| A2 | `.hero{padding:28px 16px 20px}`（原 72/46）；`h1{font-size:clamp(28px,5vw,40px);letter-spacing:.5px;line-height:1.2}`；`p{font-size:14px;margin-top:10px;max-width:480px}` |
+| A3 | 徽章改实心卡（`--card` 底 + `--line` 边 + `--badge-shadow`，去掉玻璃模糊）；标题改三段渐变 `--brand-grad-3`（brand1 → brand2 → **brand3 #e05cff**，色值收口在 tokens.css） |
+| A4 | 首屏节奏（375×812 实测）：header 60 + hero 181 + 搜索框 70，搜索框底 311px、最近使用第 2 行卡底 637px，**都在首屏内** |
+| A5 | 搜索框吸顶（同 Step 11）：`position:sticky;top:var(--head-h);z-index:60` + `--bg` 底 + 下边框 |
+| A6 | 区块顺序：hero → 搜索框 → 最近使用 → 今日诗词 + 热搜 → 分类 chips → 工具网格 |
+| A7–A9 | 最近使用折叠（默认 6 条 / 展开全部 N 条）、卡片 desc 截 12 字 + `…`、收藏空态标准引导卡 —— Step 11 已做，本轮回归通过 |
+
+**两点实现说明：**
+
+1. **徽章文案回到短版**（`114 个工具 · 本地优先 · 12 个 ⚡在线增强`）。副标题已独立成 `<p>`，
+   徽章里再重复一遍「所有处理在浏览器内完成」会让徽章撑到两行（约 40px），与 A4 要求的「徽章行约 26px」不符。
+2. **hero 实测 181px，不是任务书估的 130px。** 逐项对得上的是 A4 的分项估算
+   （徽章 26 + 标题 33.6 + 副标题 2 行 46 + 上下 padding 48 + 间距 24 ≈ 178）；
+   130px 那个总数与它自己的分项相加并不自洽。按任务书给的 CSS 原样落地即为 181px，
+   且首屏仍能完整看到搜索框 + 最近使用前 2 行（余量 175px），故未再自行压缩。
+
+## 二、Part B · 7 项问题修复
+
+### B1 弹幕 — 字横向 + 位置自适应
+- 类名改为任务书指定的 `.danmu-content` / `.danmu-stage`：
+  `.danmu-stage{display:flex;min-height:100vh;padding:20px;overflow:hidden}` +
+  `.pos-top/.pos-middle/.pos-bottom{align-items:flex-start/center/flex-end}`；
+  `.danmu-content{writing-mode:horizontal-tb;white-space:nowrap;font-size:clamp(40px,15vw,200px);font-weight:900;color:var(--danmu-color,#fff);text-align:center}`。
+- 新增**位置三档**（顶部 / 居中 / 底部）；控制栏含 文字颜色 / 背景色 / 字号滑块 **40–200px** / 速度滑块（慢中快）/ 模式（滚动 ↔ 固定居中）。
+- 两个必须踩到的点：
+  1. `.danmu-content` 必须 `flex:0 0 auto`，否则 `width:max-content` 会被 flex-shrink 压回容器宽，
+     滚动结束时 `translateX(-100%)` 只走了一个容器宽，字停在屏幕里出不去。
+  2. `@keyframes danmuScroll` 起点用 **`100vw`** 而不是 `100%`（=字自身宽度）：
+     短文案时 100% 不足一个屏宽，起跑瞬间会有一小截字露在舞台里。
+
+### B2 硬件天梯改为动态更新
+- 新增 `functions/api/soc-ladder.js`：Cache API 缓存 24h（`caches.default`，本地/单测环境做空值守卫），
+  响应带 `Cache-Control: public, max-age=86400`，前端另有 localStorage 兜底。
+- **数据源实测（三条都影响实现）**：
+  1. 任务书给的 `.../main/data.js` **不存在**（404）。该仓库默认分支是 **master**，
+     且 `data.js` 里只有图片路径，真正的天梯数据在 **`index.js` 的 `var cpuData = [[...]]`**。
+  2. `raw.githubusercontent.com` 在国内网络下**经常直接超时**（实测 7s 无响应），
+     只挂它一个源等于「永远走兜底」。故补了实测可用的镜像，并**全部并行发起、谁先成功用谁**
+     （实测 gh-proxy.com ~0.8s / ghproxy.net ~1.9s / gcore.jsdelivr ~4.1s）。
+     并行最坏 6s，串行最坏 36s。
+  3. `cpuData` 是**二维表格**：一行 = 一个性能档位（越靠前越快），一列 = 一个品牌线。
+     所以分数由**行号**换算（TOP1 = 10000），品牌由**列号**映射（列序取自源仓库 index.html 表头）。
+     单元格里还可能用 `<br/>` 塞多款芯片，并有 `MSM8225<br/>/8625` 这种被硬拆开的续行，需要并回上一款。
+- 解析用**手写括号匹配 + 单引号转 JSON**，不用 `eval/new Function`（Workers CSP 会拦，也不该执行远端代码）。
+- 兜底：上游全挂时返回内置 TOP 50；前端显示「（上游暂不可达，当前为内置榜单）」而不是假装更新过。
+- 前端 `cpu_ladder.js`：显示「更新于 YYYY-MM-DD」；`year` 字段远端没有 → 为空时整列不渲染；
+  三级兜底：接口 → localStorage → 打包的静态字典。
+
+### B3 OCR 换模型
+- 后端主模型换 `@cf/unum/uform-gen2-qwen-500m`，备用 `@cf/meta/llama-3.2-11b-vision-instruct`。
+- 新增 `lang` 表单字段（中文 / 英文 / 中英混合），prompt 随语言变 ——
+  指定「只提中文」时模型不会把图中英文也塞进来。
+- 前端上传前用 canvas 把**最大边压到 1600px**（实测 2600×1800 → 1600×1108），
+  透明区域先铺白底再转 JPEG（JPEG 无透明通道，透明会变黑反而更难识别）。
+
+### B4 摇骰子改为真实感（骰盅）
+- 新增骰盅：倒扣杯 = 盅身（椭圆 + 上下渐变模拟 3D 圆柱）+ 盅口椭圆（朝下的开口），
+  颜色全部走 tokens 的 `--cup-*` 组。
+- 动画序列：**落下（.42s）→ 晃动 3s → 抬起（.54s，上移 + 缩小 + 淡出）→ 骰子落地回弹并显示点数**。
+  连摇 5 次时晃动压到 1.2s，否则 5 次要等 20 秒。
+- 骰面改为**内嵌 SVG** 点阵（每面一张 viewBox 100×100，只画该点数需要的圆点，点色走 `--die-pip`），
+  不加载任何外部图片，也不依赖 Three.js。
+- **顺带修掉一个既有几何 bug**：六个面的 `translateZ` 原先写死 `39px`（= 78px 骰子的一半），
+  但骰子宽度是 `width:100%` 跟着栅格走的，手机上只有 ~44px —— 面被推到 39px 外，
+  立方体是**炸开**的，看起来就是一张平板。改为由 `--die-size` 统一驱动尺寸与推距后才是真立方体。
+- 触感反馈加了 `navigator.userActivation` 判断：连摇时第 2 次以后由定时器触发，手势已过期，
+  Chrome 会往控制台打 `Blocked call to navigator.vibrate` 警告，先判断就不会有噪音。
+
+### B5 背单词加 3 个词库
+- 新增 `words-cet6.js` / `words-kaoyan.js` / `words-ielts.js`，各 **100 词**（w/p/m/e/s 字段与四级一致，
+  另补了例句，否则卡片背面是空的）。`core/dict.js` 的 FILE 表加三条驼峰 → 连字符映射。
+- 词库下拉改成 四级 / 六级 / 考研 / 雅思 四项（不再是「即将上线」的 disabled）。
+- **进度按词库独立保存**：存储键从固定的 `litebox_wordcard` 改为 `litebox_wordcard_<libKey>`；
+  旧的单库键首次进入时自动迁移到四级那一份。
+- 顺带加固：`it.e` 缺失时不再把 `undefined` 渲染到卡片上（隐藏例句行）。
+- 后续批次追加到 500+ 时，直接往数组末尾续写、`s` 顺延即可。
+
+### B6 综合搜索改为下拉选择
+- 九宫格按钮墙 → 「选择平台」下拉（默认百度）+ 关键词输入框 + 搜索按钮。
+- 按钮文案跟着选中平台走（`🔍 在知乎搜索`），避免「选了知乎、按钮还写着百度搜索」的错位感。
+- 平台清单保持现有 **12** 个（百度 / B站 / 知乎 / 微博 / 小红书 / 抖音 / 淘宝 / 京东 / 豆瓣 / GitHub / 维基百科 / 微信）；
+  任务书写「11 个」，但现有清单确实是 12 项，少一个都是功能回退，故全部保留。
+
+### B7 导航条贴底
+Step 11 已按同一份 CSS 改写（`bottom:0` + `width:fit-content` + `max-width:calc(100vw - 24px)`
++ `border-radius:22px 22px 0 0`），本轮回归通过，未再改动。
+
+## 三、验收自检（真实 Chrome headless，375×812，逐项断言）
+
+| 检查 | 结果 |
+|---|---|
+| A1–A9 首页九项 | **全部 PASS** |
+| B1–B7 七项 | **全部 PASS** |
+| 375px 横向滚动（遍历全部 114 个工具页） | **0 个溢出** |
+| Console 报错 | **0**（vibrate 警告也已消除） |
+
+关键实测数据：
+
+- 首屏：header 60 + hero 181 + 搜索框 70 → 搜索框底 311px、最近使用第 2 行卡底 637px（视口 812px）。
+- 天梯：`/api/soc-ladder` 冷启动 0.78s 拿到 **298 款 SoC**（8 个品牌），前端显示「更新于 2026-10-05」，
+  本机缓存 298 条；筛「苹果」→ 23 款且全部为苹果。
+- OCR：2600×1800 的图 → 服务端收到 **1600×1108 / image/jpeg**，`lang=en` 正确送达。
+- 骰盅：`pt-cup-drop → pt-cup-shake → pt-cup-lift` 三阶段按序出现；30 张 SVG 骰面，
+  各面点数 1/2/3/4/5/6 正确；立方体推距 = 骰子边长一半（几何断言通过）。
+- 背单词：四级 `abandon` / 六级 `abundant` / 雅思 `accommodation` 各自加载；
+  六级标记 1 个后 1%，切雅思 0%，切回六级仍是 1%（独立进度）。
+
+## 四、本轮验证方式（临时脚本，跑完即删）
+
+- 本地 Node 服务器**直接 import 真实的 `functions/api/*.js`** 并调用 `onRequest`
+  （Node 22 有全局 Request/Response/fetch），再配 Chrome headless + CDP 做端到端断言。
+  ★ 该服务器必须跑在**前台** shell 里：后台任务拿不到出网权限，GitHub 会一直超时。
+- `functions/api/soc-ladder.js` 另用真实网络单测：298 款、字段异常 0、品牌分布正常、兜底 50 款可返回。
+- 全部改动文件 `node --check`（含 ESM 后端）语法通过。
+
+---
+
+# Step 13 — 首页精简 + 6 项问题修复
+
+红线复核：复制一律 `LB.copyNow` ✅；`!important` 仅存在于 `base.css` ✅（任务书 B1 示例里的
+`writing-mode:horizontal-tb !important` 按红线落地为**无 `!important`**，横排由基础规则保证，
+验收断言 `writing-mode === horizontal-tb` 实测通过）；无内联样式（仅 JS 下发 CSS 变量 / DOM 定值）✅；
+`tokens.css` 之外无硬编码颜色（新增 `.bt-*` 与弹幕变量全部走 `var(--brand1)` 等 token 或
+`color-mix()`）✅；界面无任何「数据来源」标注 ✅（B7 只显示「数据更新于 YYYY-MM-DD」，不写来源仓库）。
+
+## 一、Part A · 首页精简
+
+| 项 | 做法 |
+|---|---|
+| A1 | 删除 `.home-daily-poem`（今日诗词）+ `.home-daily-hot`（热搜）整块 DOM、`loadDailyPoem` / `loadDailyHot` 等 JS 逻辑、home.css 对应样式；区块顺序变为 header → hero → 吸顶搜索 → 最近使用(6) → 分类 chips → 工具网格 |
+| A2 | Step 12 的 hero 精致化、搜索吸顶、最近折叠、卡片截断、收藏空态**全部保留**，回归通过 |
+
+## 二、Part B · 6 项问题修复（B1–B7 按任务书编号）
+
+### B1 弹幕全屏横排
+- `.danmu-content`：`writing-mode:horizontal-tb; text-orientation:mixed; white-space:nowrap;
+  font-size:clamp(60px,18vw,220px); width:max-content`（无 `!important`，见红线复核）。
+- 长文本横滚：`@keyframes danmuScroll` 从 `translateX(100vw)` 到 `translateX(-100%)`；
+  **短文本（放得下一行）由 JS 比较内容宽与舞台宽后加 `dm-center` + `dm-noscroll`，居中静止不滚**。
+- 控制项齐全：位置三档 `.dm-pos`（top/middle/bottom → `align-items`）、文字色 / 背景色两个
+  `input[type=color]`（CSS 变量下发）、字号滑块 **60–220**、模式切换 `.dm-mode`（scroll / fixed）。
+- **固定模式居中修正（截图复查发现）**：旧实现 `.dm-fixed{width:100%}` + 舞台左对齐，
+  超宽文案只从右边被裁（字看起来整体偏左）。改为固定模式一律 `dm-center`、
+  `.dm-fixed` 保持 `width:max-content`，超宽时**左右等量溢出**（实测 L=239.4px / R=239.4px），
+  短文案照常居中。
+- 全屏 API 后不锁 `screen.orientation`，横竖屏交给用户；点击舞台退出全屏。
+
+### B2 导航条贴底 + 高度还原
+- `.tabbar`：`padding:6px 7px`（上下完全对称）+ `bottom:env(safe-area-inset-bottom,0px)` +
+  `margin:0` + `line-height:1`；无 `margin-bottom`、无 `min-height`。
+- 按钮 `min-width:54px; height:50px; padding:4px 7px 3px`。
+- **顺带修掉一个历史遗留**：`layout.css` 里 `@media(max-width:560px){.tabbar button{min-width:52px}}`
+  会在 375px 下把按钮压回 52px，与任务书 54px 矛盾，已删除（3×54px 在 375px 放得下，实测无横向滚动）。
+
+### B3 弹层打开时隐藏导航条
+- 走任务书推荐的 CSS 类方案（比 `style.display` 优雅）：`sheet.js` 的 open/close 已维护
+  `body.sheet-open`，`layout.css` 加 `body.sheet-open .tabbar{display:none}`。
+- 「我的」「分类」弹层实测：打开即隐藏、关闭即恢复（`display:flex`）。
+
+### B4 白噪音独立工具
+- 新增 `noise` 注册（学习效率类）+ `public/js/tools/noise.js` + `public/vendor/dict/noise-sources.js`。
+- **音源 10 条**（雨声 / 海浪 / 溪流 / 咖啡馆 / 篝火 / 森林 / 鸟鸣 / 夏夜虫鸣 / 火车 / 白噪音），
+  落在任务书 8–10 区间。
+- **主源换成 jsDelivr 上的 MIT 开源音频**（omambience / QuietField / ambiently 三仓库，每条带
+  fastly + gcore 两个镜像 alt）：任务书点名的 pixabay / soundjay / archive.org 在本环境实测**不可达
+  或无直链 mp3**，为满足「CDN 主源 + 合成降级」的链路结构换用可直连的等价免费源。白噪音一条 `url:''`
+  纯合成。
+- **Web Audio 合成降级**：rain（白噪 + 低通 + 随机脉冲）、ocean（粉噪 + LFO）、fire（白噪 + 随机爆裂）、
+  birds、white —— CDN 全部失败时自动切合成，UI 不弹「加载失败」。
+- UI：音源卡片网格、音量滑块、定时关闭 15/30/60 分钟 / 不限、播放历史（localStorage）。
+- 番茄钟：`pomo.js` 音频控制栏移除，改为一行提示 + 跳转按钮「🌧 去白噪音工具播放」（`href="#noise"`），
+  完成提示音（ring3）保留。
+
+### B5 聚会小游戏拆分
+- party 拆成 4 个独立文件 + 独立注册（分类「聚会娱乐」）：`dice.js` / `bottle.js` / `bomb.js` /
+  `truth_dare.js`；**`party.js` 已删除**，registry 无 party 残留。比大小并入 dice 的副按钮（⚔️ 比大小），
+  谁是卧底整体移除（全库 grep「卧底」0 命中）。
+- `truth_dare.js`：真心话 / 大冒险题库**各 50 条**（脚本校验 50/50、无重复），连续两题不重复，
+  段切换复用 `.seg`。
+- registry 现共 **118** 个工具，id ↔ 文件 ↔ 分类三方一致（`MODULE_FILES:{rand:'randomnum'}` 别名保留）。
+
+### B6 摇骰子真实感
+- 结构：深蓝圆托盘（椭圆 + 内阴影高光）+ 倒扣深色骰盅（`::before` 顶部椭圆开口，渐变全部走 token）。
+- 骰子为 **CSS 3D 立方体 + 6 面内嵌 SVG 圆点**（白面、深蓝点为 token 变量），5 颗骰子逻辑不变。
+- 动画序列按任务书：covering → shaking（`cupShake` 3s）→ lifting → 落定 rotateX/rotateY → 显示总点数。
+- 摇动期间按钮锁定；豹子（三同）提示保留；比大小副按钮走同一随机源结算。
+
+### B7 天梯更新频率
+- `functions/api/soc-ladder.js`：`Cache-Control: public, max-age=604800`（**7 天**）+ Workers
+  Cache API `cache.put/match`；数据源 GitHub raw，多源降级 + 内置兜底表。
+- 前端 `cpu_ladder.js`：显示「数据更新于 YYYY-MM-DD」（取后端 `updated` 字段）；
+  「🔄 检查更新」手动按钮（请求期间置灰「检查中…」，完成后恢复并 toast 结果）；页面底部说明 7 天节奏。
+
+## 三、转瓶子（B5 拆出）复查修的两个真 bug
+
+1. **座位文字竖排换行**：绝对定位 + `max-width` 的可用宽度按「容器宽 − left」计算，右侧座位被挤成
+   竖排两行。`.bt-seat` 加 `width:max-content` 修复。
+2. **瓶口指向与高亮错位**：🍾（Noto）瓶口原生朝左上 = 罗盘 315°，不是「正上」。加 `BASE=45°`
+   静态基准（CSS `rotate(45deg)`，JS 旋转写 `BASE + spinTotal`），结算角按
+   `bearing = spinTotal % 360` 取最近座位 —— 截图复核瓶口与高亮座位已严格对齐。
+
+## 四、验收自检（真实 Chrome headless，375×812，逐项断言）
+
+| 检查 | 结果 |
+|---|---|
+| 首页两项（无诗词 / 热搜、六区块顺序） | **全部 PASS** |
+| 弹幕四项（横排、上/中/下、颜色背景、滚动/固定） | **全部 PASS**（含固定模式左右等量裁切新断言） |
+| 导航条四项（padding 对称、贴底、弹层隐藏、关闭恢复） | **全部 PASS** |
+| 白噪音五项（独立入口、≥6 音源、音量、定时、番茄钟移除音频栏） | **全部 PASS**（10 音源） |
+| 聚会六项（party 已删、4 个独立工具、无比大小 / 谁是卧底独立玩法） | **全部 PASS** |
+| 天梯两项（更新日期、7 天缓存） | **全部 PASS** |
+| 全部 118 工具页遍历挂载 | **0 Console 报错** |
+| 375px 横向滚动（遍历全部 118 页） | **0 个溢出** |
+
+**合计 89/89 PASS**。扫描中额外发现并修复：`noise.js` 残留一行引用未定义的 `KEY_LAST`
+（真实 ReferenceError，点播放即崩）已删。
+
+## 五、本轮验证方式（临时脚本，跑完即删）
+
+- `verify-step13.js`：本地 Node 静态服务器（:8099，`/api/soc-ladder` 用 900ms 延迟桩以验证按钮置灰态）
+  + Chromium headless + CDP。**关键**：必须用 `Emulation.setDeviceMetricsOverride{375,812,mobile}` ——
+  `--window-size` 在 headless=new 下不生效（实测视口 500px）。
+- `shot-step13.js`：同链路截 14 张图逐张人工复查（正是复查揪出弹幕固定模式偏左、瓶子两处几何问题）。
+- 音频自动播放注意：CDP 的 `.click()` 不算用户激活，harness 不点播放键，避免 autoplay 警告污染
+  「Console 0 报错」断言。
+- 全部改动文件 `node --check` 语法通过。
+
+
+
+---
+
+# Step 14 — 火车票 / 短链接 / 图片风格化 / 试卷去手写 / 二维码 & 图片修复
+
+红线不变：复制走 `LB.copyNow`；禁 `!important`（仅 base.css 例外）；禁内联 style；tokens.css 之外
+的颜色必须走变量；界面上不标注任何数据来源。工具总数 **118 → 119**。
+
+## 一、火车票对接 12306 MCP Server
+
+- `functions/api/train.js` 重写：主通道 `POST https://mcp.pianam.cn/train-mcp/mcp`（JSON-RPC
+  `tools/call` → `query_train_tickets`），响应同时兼容 **SSE（逐行 `data: {...}`）与纯 JSON** 两种形态
+  （`pickJsonPayload`）；`parseTrainText` 先按任务书格式严格解析，再走「车次号 + 两个时刻」的宽松兜底。
+- 降级链路：MCP → 公开源（vvhan → oioweb）→ `{ available:false, links:[12306, 携程] }`。
+  日期参数按任务书改为**可选**（仅 from/to 必填）。
+- `public/js/tools/train.js`：`seat` 后端可能是**字符串 / 数组 / 对象**（MCP 文本解析出来的是字符串，
+  形如「二等座 有 · 一等座 无」），新增 `seatHtmlOf()` 统一收口渲染为余票 chip，字符串会被拆成多个
+  chip 并按「有 / 无」着色。
+- 注：本机开发环境无法直连该 MCP 端点（fetch failed），故实机验证的是降级分支；MCP 分支由桩数据
+  验证前端渲染（2 条车次 / 2 个座位 chip / 有 1 · 无 1）。
+
+## 二、短链接换国内 API
+
+- 新增 `functions/api/shorturl.js`：**服务端**按 suol.cc → xiaoqi → is.gd → tinyurl 依次尝试。
+  实机（Node）验证：`https://example.com` → `http://suol.cc/XrDif4`；非法协议返回 400。
+- `public/js/tools/shorturl.js`：改为 **同源代理优先**，再直连 suol.cc / xiaoqi，最后回退 is.gd / tinyurl。
+  原因：任务书给的两个国内 API 里，**xiaoqi 完全不返回 CORS 头**，suol.cc 的 ACAO 是 `*, *`
+  （非法值），浏览器直连必然被拦 —— 只按任务书写直连会「永远生成失败」。代理优先后仍然产出
+  suol.cc / xiaoqi 的短链，满足验收「生成国内短链」。
+- 解析修正：suol.cc 真实结构是 `{code,s_url}`、xiaoqi 是 `{code,data:{url}}`，任务书示例的
+  `text.trim()` / `d.url` 都取不到值，统一走 `pickShort()` 兼容多种结构。
+- 页面文案去掉「服务由 is.gd / tinyurl 提供」（红线：界面不标注数据来源），复制改走 `LB.copyNow`。
+
+## 三、图片风格化接入 image-to-toon
+
+- `public/vendor/image-to-toon.js`：从 npm 包 **image-to-toon@0.1.1**（MIT，零运行时依赖）的
+  `dist/index.js`（ESM）转换出的 **UMD** 构建（78 KB），暴露 `window.CaricatureEngine`、
+  `toonify`、`PRESETS` 等，并额外提供 `window.CarricatureEngine` 拼写别名（任务书里的写法）。
+- `public/js/tools/imgstyle.js` 重写：6 档风格（卡通 / 漫画 / 油画 / 素描 / 铅笔 / 人像）全部走
+  引擎内置预设 `applyPreset`（后两者本就是预设名），切换风格时把滑杆**同步成预设的实际取值**，
+  用户再拖才覆盖；参数微调 3 项：边缘强度 0.5–1.5、色阶数 4–8、平滑度 1–10。
+  - 引擎 `edgeStrength` 实际取值范围是 0–1，UI 用 `value − 0.5` 映射到 0–1，避免滑杆上半段失效。
+  - 引擎按需加载（首次进工具才拉 vendor），`engine.load()` 结果按文件缓存，切风格不再重新解码。
+  - 上传支持点击 / 拖拽 / Ctrl+V；最长边 1280 缩放到引擎（`maxDimension`）；下载 PNG。
+- 实机验证：六种风格全部出图；420×320 图卡通 94ms、人像 159ms。
+
+## 四、试卷去手写（独立工具）
+
+- 新增 `public/js/tools/handwriting-remove.js`（分类「图片设计」，`📝`），纯本地 Canvas 颜色分离
+  （任务书**方案 B**）：蓝色（`B > R+40 && B > G+30`）与铅笔灰（中等亮度 + 低饱和）判为待去除，
+  黑色印刷体（三通道都低且差值小）保留；填充时**只取非墨迹像素做取样源**，避免把印刷体灰化，
+  无邻域时回退到纸面底色估计。
+- 交互：上传（点击 / 拖拽 / 粘贴）→ 模式（智能识别 / 蓝色墨水 / 铅笔）→「一键去除手写」→
+  残留处涂抹后「填充涂抹区」→ 撤销（5 层）→ 下载 PNG；页面底部保留任务书要求的诚实说明条。
+- 实机验证：测试图蓝色手写像素 810 → **0**，黑色印刷体 8948 → 8948（**零误伤**）。
+- `functions/api/handwriting-remove.js` 按任务书**方案 A** 建好（Workers AI，未配置 `env.AI` 返回
+  503），代码注释说明它只能描述、不能抹除，默认不被工具调用。
+- `public/js/tools/fix.js`：**移除「试卷模式」**（模式 3 → 2），连带删掉 `applyExamEnhance` /
+  `undoEnhance` / `#fxExamBar` 与 `.fx-exam-bar` 死样式；`whiteEnhance` 保留并继续通过
+  `LB.img.whiteEnhance` 供 docscan 复用。
+
+## 五、二维码 Logo 修复
+
+- `preprocessLogo()`：上传后**方裁成正方形 canvas**（避免非正方形 Logo 被拉伸、长边越界），
+  `isLogoReady()` 兼容 canvas 与 HTMLImageElement（原来只认 `img.complete`，换成 canvas 后会直接
+  跳过绘制）。
+- Logo 尺寸上限保持 22%，加 Logo 强制 H 级容错（原有逻辑保留）。
+- 新增 **缩略图 + 「✕ 移除」按钮**：选图后出现缩略图与文件名，点移除即清空并重绘二维码；提示文案
+  补齐为「Logo 建议为正方形透明 PNG，大小不超过二维码的 22%」。
+- 顺手修掉一个**幽灵 Logo** bug：`logoImg` 是模块级状态，原先 `unmount` 不清空，离开工具再进来会
+  UI 显示「未设置」却仍画着上一张图 —— 现已在 `unmount` 置空。
+- Logo 白底圆角矩形的绘制色收口为 token `--qr-logo-bg`。
+
+## 六、图片修复「↺ 重新上传」
+
+- `fix.js` 新增 `reselect()`：清空 `srcImg` / 撤销栈 / 涂抹态，底层与蒙版 canvas 复位为 1×1，
+  切回上传区并清空 `#fxFile`（允许重复选同一个文件），无需刷新页面。
+- 按钮放在工作区头部引导行（`.fx-head`），与「涂抹 / 框选」引导文案同一行。
+
+## 七、验收自检（真实 Chrome headless + CDP，375×812）
+
+| 检查项 | 结果 |
+|---|---|
+| 应用启动 / registry 含 handwriting-remove（119 个） | **PASS** |
+| 6 个相关工具页渲染 + 375px 无横向滚动 + 无 JS 报错 | **PASS ×18** |
+| image-to-toon 六风格出图（引擎加载 + process） | **PASS** |
+| imgstyle 上传出图 / 切「人像」 | **PASS** |
+| 试卷去手写：蓝色清除 + 印刷体零误伤 + 撤销 | **PASS** |
+| 二维码：生成 / Logo 缩略图 / 自动 H 级 / ✕ 移除 | **PASS** |
+| fix：重新上传按钮 / 复位 / 试卷模式已移除 | **PASS** |
+| 火车票：降级链接 + 车次列表（字符串座位）渲染 | **PASS** |
+| 短链接：代理返回 → 渲染 → 复制走 `LB.copyNow` | **PASS** |
+
+**合计 44/44 PASS，全局 0 未捕获异常。** 另在 Node 里直接调用 Functions 处理函数验证：
+`/api/shorturl` 返回真实 suol.cc 短链、参数校验 400、`/api/train` 降级 JSON 正确、
+`/api/handwriting-remove` 未配置时 503。
+
+## 八、本轮验证方式（临时脚本，跑完即删）
+
+- `verify.mjs`：Chrome `--headless=new` + CDP（`Emulation.setDeviceMetricsOverride{375,812,mobile}`，
+  `--window-size` 在 headless=new 下不生效），逐项断言 + 收集 `Runtime.exceptionThrown`。
+  静态服务器没有 Functions，`/api/*` 会 404，故涉及后端的断言用桩替换 `LB.api.getJSON`。
+- `gen-test-png.mjs`：手写 PNG 编码器，生成「纸面 + 黑色印刷横条 + 蓝色手写斜线 + 铅笔灰」测试图，
+  供去手写断言「蓝色归零、黑色不变」。
+- `build-toon.mjs`：把 npm 包 ESM 构建转成 UMD（剥掉末尾 `export {}`，包一层 factory 并把导出挂到
+  window）。升级 image-to-toon 版本时重跑即可。
+
+---
+
+# Step 15 — 5 项修复 + 3 项新增
+
+红线不变：复制走 `LB.copyNow`；禁 `!important`（仅 base.css 例外）；禁内联 style；tokens.css 之外
+的颜色必须走变量；界面上不标注任何数据来源。工具总数 **119 → 120**。
+
+## Part A · 修复
+
+### A1 科学计算器：输入阶段不再报错
+
+- `scicalc.js` 把「校验时机」拆成两段：
+  - **输入时**（手敲 + 点按键）只走 `isPartialValid()` 字符白名单 —— `sin(`、`2+3*` 这类未完成状态一律放行；
+    只有出现白名单外字符才提示「表达式包含不允许的字符」。
+  - **点「＝」/ 回车**才走完整求值，并先 `autoClose()` 自动补全未闭合的右括号，把补全后的式子回填输入框。
+- 白名单**不是**任务书那条写死的正则：`[0-9+\-*/%^().\sπe√!sincotalgln]` 里没有 q/r/b/x/p，
+  会把 `sqrt` `cbrt` `abs` `exp` 全判成非法字符。改为从 `FUNCS`/`CONSTS` 的真实名单生成，是名副其实的白名单。
+- ★ **没有**采用任务书示例的「白名单 + Function 拼接执行」方案 —— 那会把用户输入拼成可执行代码，
+  是安全回退（原文件头注释已详细说明）。A1 要的是「输入不报错」这个 UX 修复，递归下降解析器继续用。
+- 顺带修掉一个真 bug：**「＝」键被拼进表达式**。`press('=')` 原先走 `else { inp.value = v + k }`，
+  输入框会变成 `2+3=`，而且不触发计算，只能靠下方的「＝ 计算」按钮 —— 现在 `=` 直接调 `run()`。
+- 错误文案细化：`sin()` → 「sin 缺少参数」、`()` → 「括号内缺少表达式」（原先都笼统报「括号不匹配」）。
+
+### A2 记账本：补核心功能
+
+- **多账户**：预设 现金 / 微信 / 支付宝 / 银行卡，可添加自定义账户（💳），自定义账户在未被记录引用时可删除。
+- **账户余额**：首页顶部逐账户列出余额（收入 − 支出；转账从源账户扣、给目标账户加），并给出净资产。
+- **转账**：类型新增「转账」，选转出 + 转入账户；**不计入收支统计**，只挪余额；转账不做定期。
+- **时间筛选**：`.seg` 本周 / 本月 / 本年 / 全部 / 自定义（自定义起止日期），只影响统计与明细，不影响余额。
+- **分类统计**：支出 Top 5 横向条形图（按当前时间范围），点任意分类即筛选该分类记录。
+- **搜索 + 筛选**：备注/分类/账户关键字 + 类型 + 账户 + 分类四重下拉，生效中的条件以 chip 展示、可单点清除。
+- **导出 CSV**：字段 日期 / 类型 / 金额 / 分类 / 账户 / 备注，按**当前筛选结果**导出，带 BOM 供 Excel 识别。
+- **定期记账**：记录可标「每月重复」；每次打开工具时把模板补到今天为止（月末用当月天数兜底，避免 31 号溢出），
+  生成的记录带 `fromId` 指向模板，保证不会重复生成。
+- **旧数据升级**：`litebox_ledger` 旧格式是记录数组，首次加载自动升级成 `{accounts, records}` 对象，
+  旧记录归入「现金」账户，并提示升级了多少条。
+
+### A3 卡路里 ↔ 伙食记录联动
+
+- `meallog.js`：食物名输入框实时匹配热量库（前缀优先，最多 8 条建议，支持 ↑↓ + Enter）；
+  **完整命中即自动带出热量**（按份量换算，可留空花费），**未命中则只记花费、不计热量**（`kcal: null`）。
+  记录新增 `kcal / grams / unit / foodCat` 字段；新增「今日摄入」卡片；列表显示 `≈ xxx kcal（100g）`。
+- `calorie.js`「今日摄入」= 本工具手动记录 + 伙食记录里带热量的条目（`#calSrc` 拆分展示两个来源）。
+- 反向同步：在卡路里里加一条食物 → 自动往伙食记录写一条**花费为空**（`amt: 0`）的记录，带 `fromCalorie: true`。
+- **防重复计算**：正向汇总时跳过 `fromCalorie` 的条目（它已在本工具侧计入），否则同一条会被算两遍。
+- 删除联动：删掉手动记录时，同步过去的那条伙食记录一并删除，不留孤儿数据。
+
+### A4 分类内按实用度排序
+
+- `registry/tools.js` 给 **114 个**工具加了 `weight`（1–10，按任务书清单）；清单外的工具（scoreboard / rand /
+  radix / textstats / handwriting-remove）按任务书规则**默认 0**，排在各分类最后。
+- `home.js` 渲染分类时 `.sort((a,b) => (b.weight||0) - (a.weight||0))`；`filter()` 返回新数组，不会改动 `LB.tools`。
+- 任务书把 `mbti` 归到「学习效率」、`university` 归到「日常生活」，与 registry 现有分类不一致；
+  由于 weight 是「工具的属性」而非「分类的属性」，按 **id 赋权**处理，分类归属保持不动。
+
+### A5 卡路里数据校准
+
+- 库内原本已有 **238 条**（任务书要求的「先 100 条再补到 200+」在上一轮就已达成，本轮直接做校准与补缺）。
+- 按任务书示例修正：可口可乐 `42 kcal / 碳水 10.6` → **`43 kcal / 10.8`**（官方营养表 43 kcal/100ml）。
+- 补齐任务书清单里缺的条目：包子（猪肉）/ 鸭蛋 / 雪碧 / 饼干（消化饼）/ 沙县小吃（拌面）→ 共 **243 条**。
+- 文件头补写**生熟口径**说明（白米饭 = 蒸熟的饭 116 kcal/100g，生米约 346 kcal/100g；名称里带
+  （煮）/（干）/（鲜）的即为该状态），并明确数据来源为「中国食物成分表第 6 版 + 品牌官方营养表」。
+
+## Part B · 新增
+
+### B1 PDF 签名 / 盖章（pdf.js 第 5 个 tab）
+
+- 上传 PDF → PDF.js 渲染当前页预览（可翻页）；上传签名/印章图 → **自动去白底**（亮度 ≥240 全透明，
+  200–240 线性过渡保留笔画边缘）并**裁掉四周透明留白**（否则落点会明显偏移）。
+- 上传后**自动落在页面右下方**（真实签名常见位置），拖动可微调、滑杆改宽度、直接点预览图重新落点，
+  另有倾斜角（±25°，旋转留透明边后仍是轴对齐矩形）与不透明度。
+- 生成：`pdf-lib` `drawImage`，坐标用**相对页面尺寸的比例**存储，因此「应用到所有页」在不同页面尺寸下也不会跑偏；
+  预览是左上角原点、PDF 是左下角原点，写入时做了 y 翻转。
+- 支持「应用到所有页」或「指定页（如 1,3-5）」。
+
+### B2 PDF 加密 / 解密（pdf.js 第 6 个 tab）
+
+- ★ **任务书的技术前提有误**：pdf-lib 官方版本（含 1.17.1）**没有加密能力**，仓库里那句
+  `PDFDocument.load is encrypted` 只是「拒绝加载」的错误文案。已确认并改用 **@cantoo/pdf-lib 2.11.1**
+  （pdf-lib 的维护分支，API 完全兼容，额外提供 `encrypt()` 与 `load(bytes,{password})`），
+  vendor 从 525KB 换成 617KB。
+- 加密：用户密码（必填）+ 所有者密码（可选，留空同用户密码）+ 权限（允许打印/复制/编辑），默认 **AES-256**。
+- ★ 解密**不能**只 `load({password})` 再 `save()` —— 实测解密后的上下文仍保留原文件的 `/Encrypt` 残留对象，
+  重新保存出来的文件 Adobe / Chrome 依然判定为加密。改为**新建空文档 + `copyPages` 搬页面**，
+  得到真正无加密的 PDF（这也是任务书「重新保存即可移除加密」不成立的地方）。
+
+### B3 压缩包工具（新工具 ziptool）
+
+- `public/vendor/zip.min.js`（@zip.js/zip.js 2.7.45，UMD，全局名 `zip`，99KB，AES-256 加解密），
+  按任务书引入 `index.html`（`defer`），工具内另有按需加载兜底。
+- 解压：读 .zip → 列出文件名 / 大小 / 修改时间 / 是否加密（🔒），单文件下载、「全部解压下载」
+  （1 个文件直接下载，多个文件重新打成无密码 zip）。
+- 压缩：多文件选择/拖拽 → 压缩级别（低/中/高）+ 可选密码（AES-256）→ 生成 zip。
+- ★ 踩坑：`LB.img.bindDrop` 会把非 `image/*` 的文件**全部过滤掉**（它是给图片工具用的），
+  压缩包工具必须自己实现一份通用拖拽绑定，否则选文件毫无反应。
+- ★ 踩坑：zip.js 抛的是英文（`Password required` / `File contains encrypted entry`），
+  统一经 `zipErrMsg()` 翻成中文提示。
+
+## 顺带修掉的一个既有 Console 报错
+
+全工具遍历时发现 `iplookup` 往控制台丢一条 `blocked by CORS policy`：它的「查本机」链路里
+`/api/ip → ipapi.co → ipify`，而 **ipapi.co 不返回 CORS 头**，浏览器直连必然被拦（无后端时必现）。
+该级兜底永远不可能成功，已删除（保留 ipify —— 它返回 `Access-Control-Allow-Origin: *`，是唯一可用的直连兜底），
+同时清掉随之失效的 `fromIpapi()`。
+
+## 验收自检
+
+### 功能验收（真实 Chrome headless + CDP，375×812）
+
+| 检查项 | 结果 |
+|---|---|
+| 工具总数 120 / registry 含 ziptool / 图片设计首位=证件照 / 网络工具前两位=IP查询+天气 | **PASS ×4** |
+| 全部分类内 weight 严格非递增 | **PASS** |
+| A1：sin( 不报错 / ＝提示「缺少参数」/ 2+3* 不报错 / 非法字符才报错 / 自动补右括号 / 2+3=5 | **PASS ×7** |
+| A2：4 账户 / 支出扣减 / 收入 / 转账不计收支 / 分类 Top5 / 点分类筛选 / 搜索 / 时间筛选 / 导出 CSV / 定期补记 | **PASS ×13** |
+| A3：完整名带出热量 / 部分词给建议 / 未命中不计热量 / 正向汇总 / 反向同步花费为 0 / 合计 260 / 删除联动 | **PASS ×12** |
+| B3：生成普通 zip / AES 加密 zip / 无密码列清单 / 无密码解压报错 / 输密码解压 / 单文件下载 | **PASS ×6** |
+| B1：预览渲染 / 去白底 / 自动落点 / 点击放置 / 生成 PDF（2 页 + 内嵌图片） | **PASS ×5** |
+| B2：加密后无密码打不开、有密码可开 / 解密后无需密码 / 错误密码提示 | **PASS ×3** |
+
+**功能验收 64/64 PASS。**
+
+### 回归 + 全站遍历
+
+| 检查项 | 结果 |
+|---|---|
+| PDF tab1 图片转 PDF（2 张→2 页） | **PASS** |
+| PDF tab2 PDF 转图片（2 页缩略图） | **PASS** |
+| PDF tab3 合并（2+2→4 页）/ 拆分 | **PASS** |
+| PDF tab4 加页码 / 加水印 | **PASS** |
+| 全 120 个工具页遍历 · 无未捕获异常 | **PASS** |
+| 全 120 个工具页遍历 · **Console 0 报错** | **PASS** |
+| 全 120 个工具页遍历 · 375px 无横向滚动 | **PASS** |
+
+**回归 9/9 PASS。**
+
+### 独立实现交叉验证（不依赖被测代码）
+
+- `pyzipper` 打开本工具产出的 zip：`flag_bits & 0x1 = 1`（已加密）、无密码读取被拒、用 `z123` 读出正确内容。
+- `pypdf` + `cryptography` 打开本工具产出的 PDF：`is_encrypted = True`、`decrypt('u123')` 返回
+  `USER_PASSWORD`、解密后 2 页；明文 PDF 与解密产物均 `is_encrypted = False`。
+
+## 本轮验证方式（临时脚本，跑完即删）
+
+- `gen-fixtures.mjs`：生成 明文/加密 PDF、签名 PNG、待压缩文本。
+- `verify15.mjs`：A1–A5 + B1–B3 的功能断言（64 项）。
+- `verify15b.mjs`：PDF tab1~4 回归 + 全 120 工具页遍历（Console / 375px）。
+- 两个脚本都加了 `Network.setCacheDisabled`：复用 profile 时 Chrome 会拿旧的 JS 缓存，
+  否则改了源码还按旧代码跑（本轮就被这个坑过一次 —— 删了 ipapi 仍报 ipapi 的错）。
+- 全部改动文件 `node --check` 语法通过。
+
+---
+
+# Step 16 — 6 项修复 + 1 项新增
+
+红线不变：复制走 `LB.copyNow`；禁 `!important`（仅 base.css 例外）；禁内联 style；tokens.css 之外
+的颜色必须走变量；界面上不标注任何数据来源。工具总数 **120 → 121**。
+
+## A1 视频 / 音频转码（FFmpeg.wasm）
+
+- `public/vendor/ffmpeg/` 三件套：`ffmpeg.min.js` + `814.ffmpeg.js`（worker chunk，**必须一起放**）
+  + `ffmpeg-core.js` + `ffmpeg-core.wasm`（32MB）。按需加载：只有点「开始转码」时才拉核心。
+- 新增 `public/js/tools/ffmpeg-common.js`（挂在 `LB.ffmpeg`），vconv 与 acut 共用一份加载/搬运逻辑：
+  懒加载单例、写文件 → `exec` → 读文件 → 删文件（防止 MEMFS 随使用次数膨胀）、失败时丢弃实例重建。
+- `vconv.js`：顶部 `.seg` 改为 **压缩 / 转码**；转码 tab 支持 MP4 / MKV / MOV / AVI / WebM +
+  视频编码 / 音频编码 / 质量三档。
+- `acut.js`：顶部 `.seg` 改为 **剪辑 / 转码**；转码 tab 支持 MP3 / WAV / AAC(.m4a) / FLAC / OGG +
+  128 / 192 / 320 kbps（无损格式自动禁用码率）。
+  ★ 顺带补上了这个工具**原本缺失的 `.tool-head`**（之前连返回按钮都没有）。
+
+### ★ 实测结论（三轮真实浏览器探测，不是照抄任务书）
+
+任务书给的 `https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.10/dist/umd/ffmpeg.min.js` 与
+`@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.js|wasm` 路径**都存在**，但有两处必须纠正：
+
+| 探测项 | 结果 |
+|---|---|
+| `@ffmpeg/ffmpeg@0.12.10/dist/umd/ffmpeg.min.js` | jsdelivr 自动跳转到 `ffmpeg.js`（4126B），**同目录还有 `814.ffmpeg.js`（2648B）是 worker chunk，缺了它 `new Worker` 404** |
+| libx264 / mpeg4 / libvpx / aac / libmp3lame / libopus / libvorbis / flac / pcm_s16le | **全部可用** |
+| **libx265（H.265）** | **不可用**：2 秒 320×240 测试片 45 秒都跑不完（wasm 下极慢），会长时间无响应 |
+| **libvpx-vp9（VP9）** | **不可用**：一旦执行会把 worker 打崩，之后所有任务都失败 |
+| 多实例 | 连续 `new FFmpeg()` 第二次就崩 —— 必须**全局单例** |
+| 转码结果 | mp4 / mkv / mov（H.264+AAC）、avi（MPEG-4+MP3）、webm（VP8+Opus）、mp3 128k/320k、wav、flac、ogg、m4a **全部成功**，单条 0.1~0.3 秒 |
+
+因此编码下拉里 **H.265 / VP9 保留但置灰**并写明原因，只暴露实测可用的组合 —— 这是对「可选」
+的处理方式，避免用户点一下就卡死页面。
+
+## A2 简历生成器
+
+- **证件照**：新增上传位（可选），自动缩到最长边 400px 转 JPEG dataURL 存进同一份 state（刷新后仍在），
+  以 `position:absolute` 落在纸张右上角；有照片时给 header 让出 104px，避免文字压图、也让联系方式的
+  底边线提前收住。侧边色块模板下照片改为落在左侧色块里（`position:static`）。
+- **导出 PDF**：原按钮是「🖨️ 打印 / PDF」，按任务书改名为 **📄 导出 PDF**，仍走 `window.print()` +
+  既有打印 CSS（A4、隐藏编辑器与导航）。
+- **模板**：任务书说「保留现有模板，新增 4 套」—— 但现有模板**本来就已经是 8 套**（不是任务书以为的
+  4 套），所以新增 4 套后总数是 **12 套**：简约黑白 / 双栏技术风 / 侧边色块 / 经典衬线，全部可用
+  （验收里逐套切换断言过）。12 ≥ 8，验收条目「8 套都能用」成立。
+
+## A3 导航条完整胶囊
+
+- `layout.css`：`border-radius:22px 22px 0 0` → **`22px`**（四角全圆）；`bottom:env(...)` →
+  **`calc(8px + env(safe-area-inset-bottom,0px))`**，让下半个圆角不被屏幕边缘切掉，iPhone 上仍避开底部横条。
+- 同步把 `html{scroll-padding-bottom}` 从 88px 提到 96px，保持滚到底部时卡片不被导航条遮挡的余量。
+
+## A4 二维码修复
+
+- ★ **换成 qrcode@1.5.3**：npm 包**没有**预构建的浏览器 bundle（任务书给的
+  `build/qrcode.min.js` 404，包里只有 `lib/browser.js`），且本环境 esbuild 的 postinstall 起不来
+  （EBUSY）。于是自己写了一个迷你 CJS→IIFE 打包器（`build-qrcode.cjs`，29 个模块）打出
+  `public/vendor/qrcode.min.js`（82KB，全局名 `QRCode`），删掉旧的 `qrcode-generator.js`。
+- 取 `QRCode.create()` 的模块矩阵，**绘制逻辑仍用本文件自己的**（圆点/圆角/渐变/Logo 都要保留）。
+- 显式 `mode:'byte'`：中文必须走 UTF-8 Byte，不能交给库自动判断（自动判断会尝试 Kanji/Shift-JIS）。
+- **容错下限**：无 Logo 至少 M（选 L 会被自动提升并提示），有 Logo 强制 H。
+- **模块尺寸 ≥ 4px**：256/384/512 从此是「下限」——模块会被压到 4px 以下时画布自动放大，
+  并在状态栏标注实际尺寸 / 模块大小 / 版本 / 静区（例如「363px（模块 11px · 版本 2 · 静区 4 模块）」）。
+- 验收用 **jsQR 真解码**（不是只看画布）：英文链接、中文链接、圆点风格、长链接（v11）、
+  加 Logo、WiFi 码 —— 全部解出且与原文一致。
+
+## A5 影视榜单扩充
+
+- 新增 `functions/api/movie-rank.js`，`type=boxoffice|douban`，多源容错、边缘缓存 10 分钟。
+- ★ **任务书的两个端点都有问题，实测纠正**：
+  - 猫眼：任务书给的 `https://piaofang.maoyan.com/dashboard-ajax` **403**（openresty 直接拒绝）；
+    正确端点是 **`dashboard-ajax/movie`**，且必须带移动端 UA + `Referer: piaofang.maoyan.com/dashboard`。
+    实测返回真实当日票房（前五：生化危机：爆发夜 7577.89万 / 神探之痕迹 5873.24万 …）。
+  - 60s：任务书给的 `/v2/movie` **404**；实际存在的是 `/v2/douban/weekly/movie`（豆瓣一周口碑榜）。
+  - 豆瓣 `movie.douban.com/j/chart/top_list` **可用**，返回真实数据（含 rating / types / regions）。
+  - 兜底链：猫眼 → 60s 口碑榜 → 豆瓣 chart；**非猫眼来源时返回 `note`，前端如实标注**
+    「实时票房接口暂时不可用，以下为豆瓣一周口碑榜」。
+- `hotlist.js` 新增 2 个 tab（🎟️ 实时票房 / ⭐ 豆瓣高分），走 `conf.api` 分支复用同一套列表渲染；
+  列表项多一行副标题（`.hl-sub`：票房占比/排片/上座，或类型/地区/上映日期），并新增兜底来源提示行。
+
+## B1 小说阅读器（新工具 reader）
+
+- 本地阅读器：上传 TXT / EPUB（点击 / 拖拽 / 粘贴），**不支持在线抓取网络小说**（版权），
+  页底有明确的诚实说明条。
+- TXT 章节切分：优先按独占一行的 `第X章/回/节/卷`、`序章/楔子/引子/前言/后记/尾声/番外` 切；
+  切不出（<2 个标记）就按每 8000 字自动分节 —— 保证任何 TXT 都能读。
+- EPUB：读 `container.xml` → `.opf` → 按 spine 顺序逐章，标题取文档里的第一个 h1~h3。
+- 阅读界面：顶部工具栏（书架 / 书名 / 目录 / 设置）、内容区、底部工具栏（上一章 / 进度条 / 下一章，
+  **点内容区中部显示/隐藏**）；目录与设置都是底部弹层。
+- 设置：字体（宋体/黑体/楷体/苹方）、字号 14–24、行距 1.5/1.8/2.2、背景（纸白/米黄/护眼绿/夜间黑）、
+  翻页模式（滚动 / 点击翻页，左右两侧点击翻页）、亮度 50%–100%。夜间模式下工具栏同步变暗。
+- 进度记忆：滚动/翻页 debounce 保存到 `litebox_reader`，刷新后自动回到上次章节与滚动位置。
+- 存储保护：书架最多 5 本；单本超过约 90 万字放弃持久化（只留本次会话）并提示；
+  `setItem` 失败时降级为内存态而不是崩掉。
+
+## 验收自检
+
+### 功能验收（真实 Chrome headless + CDP，375×812）
+
+| 检查项 | 结果 |
+|---|---|
+| 工具总数 121 / registry 含 reader / 首页无报错 | **PASS ×3** |
+| A3 四角 22px 圆角 / 距底 8px | **PASS ×2** |
+| A4 jsQR 真解码：英文 / 中文 / 圆点 / 长链接 / 加 Logo / WiFi 码 | **PASS ×6** |
+| A4 容错下限 L→M / 加 Logo→H / 模块 ≥4px / 静区 ≥4 / 状态栏标注 | **PASS ×5** |
+| A5 2 个新 tab / 实时票房渲染（含副标题）/ 豆瓣 tab | **PASS ×3** |
+| A2 模板 12 套 / 4 种点名风格都在 / 12 套逐一切换 / 证件照上纸与尺寸 / 导出 PDF 触发打印 / 移除 | **PASS ×6** |
+| B1 TXT 分章 / 目录 / 跳章 / 字体字号行距 / 夜间 / 亮度 / 进度写入 / 刷新恢复 / EPUB 分章 / 诚实说明 | **PASS ×12** |
+| A1 vconv 双 tab / 下拉齐全 / H.265·VP9 标注不可用 / MP4→MKV 成功 / 产物 EBML 魔数正确 | **PASS ×5** |
+| A1 acut 双 tab / WAV 载入 / WAV→MP3 / 标注码率 / 码率生效（128k→320k 体积变大）/ 无损禁用码率 | **PASS ×6** |
+
+**功能验收 64/64 PASS，0 未捕获异常。**
+
+### 全站回归
+
+| 检查项 | 结果 |
+|---|---|
+| 全 121 个工具页遍历 · 无未捕获异常 | **PASS** |
+| 全 121 个工具页遍历 · Console 0 报错 | **PASS** |
+| 全 121 个工具页遍历 · 全部正常渲染 | **PASS** |
+| 全 121 个工具页遍历 · 375px 无横向滚动 | **PASS** |
+
+**回归 4/4 PASS。**
+
+## 本轮验证方式（临时脚本，跑完即删）
+
+- `dl-ffmpeg.mjs`：多 CDN + 重试下载 FFmpeg 三件套（32MB wasm 一次超时，必须重试）。
+- `probe-ffmpeg*.mjs`（共 5 版）：能力探测。踩的坑：① 只跑 `-encoders` 不够，必须**真跑一遍**才知道
+  x265 挂死、vp9 崩实例；② 每个新实例有独立 MEMFS，输入文件要重新 `writeFile` 进去；
+  ③ 实例崩溃会污染后续所有任务，所以探测脚本必须按「先安全项、后危险项」排序。
+- `build-qrcode.cjs`：迷你 CJS→IIFE 打包器（正则抓 `require()` + 解析 node_modules + 生成 `req()` 运行时）。
+- `verify16.mjs`：A1–A5 + B1 功能断言（64 项）。
+- `verify16b.mjs`：全 121 工具页遍历。
+- 全部改动文件 `node --check` 语法通过。
+
+---
+
+# Step 20 — 计算器双模式 + 弹幕独立 + 二维码升级 + 字幕互转（完成记录）
+
+> 承接 Step 19。红线全程遵守：无新增 !important；无内联样式；新增颜色全部走
+> tokens 变量（弹幕 9 配色在 tokens.css 的 --dm-*/--dm-fg-* 语义层）；复制走 LB.copyNow。
+
+## A1. 计算器基础 / 科学双模式 ✅（js/tools/scicalc.js 重写）
+
+- 顶部 `.seg` 切换「🧮 基础 / 🔬 科学」，选择记忆在 litebox_calc_mode。
+- **基础模式**：大号显示区 + 副显示行（累计值+待运算符）+ 4×5 键盘
+  （⌫ AC % ÷ / 7-9 × / 4-6 − / 1-3 + / ± 0 . =）。即算状态机（acc+op+entry），
+  连续运算实测：5+3=8 → ×2=16；待运算符按钮高亮（.on）。
+- **科学模式**：顶部表达式 + 底部结果；5×6 键盘按任务书排布（sin/cos/tan/()、
+  log/ln/√/x²/xʸ、π/e/!/%/C、数字与运算符）。沿用 Step 15 的**递归下降解析器**
+  （不用任务书的「白名单+Function」拼接方案——那会把用户输入拼成可执行代码）：
+  输入阶段只做字符白名单校验（`sin(` 不报错），点 ＝ 自动补全右括号再求值。
+  新增**隐式乘法**：2π=6.283…、3(4+1)=15、sin(π/6=0.5 全部实测通过。
+- **历史**：litebox_calc_history 最近 10 条（旧键 litebox_scicalc_hist 自动迁移），
+  点击回填——科学模式回填表达式、基础模式回填数值。
+
+## A2. 手持弹幕独立工具 ✅（新增 js/tools/danmu.js；teleprompter.js 移除弹幕）
+
+- 注册 `{ id:'danmu', cat:'聚会娱乐', ic:'💬' }`；teleprompter 只留提词，
+  描述与关键词同步更新。
+- 设置页：200 字 textarea + 字数/清空；**9 配色**（tokens 语义变量：经典/反白/
+  荧光绿/霓虹粉/冰蓝/亮黄/红金/海蓝/自定义取色器）；滚动方向 左/右/不滚；
+  速度滑块 1-10（2-20s 单趟）；粗细 标准/粗/极粗；特效 无/描边/霓虹/渐变/节拍；
+  镜像翻转；**横排/竖排**（writing-mode:vertical-rl，滚动相应改为纵向位移）；
+  预览区 live 同步；▶️ 全屏播放。
+- **全屏**（#danmu-fullscreen-container 内含文字层 + 隐藏工具栏）：
+  requestFullscreen（webkit 兜底）；默认只显示大字；点击屏幕 → 工具栏淡入 +
+  3 秒自动隐藏、再点立即隐藏；返回按钮退出；工具栏含返回/字号/5 快速配色/
+  方向/速度；fullscreenchange 同步 ESC 退出；wakeLock 屏幕常亮（支持时）。
+  实测：显示/隐藏/自动隐藏/全屏内改字号换色切向/退出 全通过，设置持久化。
+- 两个实测修掉的坑：块注释里写 `--dm-*/` 会把注释提前闭合（SyntaxError）；
+  applyStyle 重构时漏调 applyScheme 导致配色切换不生效。
+
+## A3. 二维码工具升级 ✅（js/tools/qr.js 重写）
+
+- **7 类型**：文本/网址（自动补 https://）/WiFi/名片 vCard3.0/电话/短信 SMSTO/邮件
+  mailto（主题正文 URL 编码）——全部生成并 jsQR 解码回读验证（WiFi 转义 `\;` 实测）。
+- **画布**：比例 自动/正方形/竖版 3:4/横版 4:3/名片 5:3（实测 495×641 / 641×495 /
+  802×481）；尺寸 400/512/800/1024；容错 L/M/Q/H（Logo 强制 H、L 提 M 沿用）。
+- **前景**：单色 / 渐变（起止色 + 方向 对角/水平/垂直）。
+- **码点**：方形/圆角/圆点；**定位图案**：跟随码点（定位环保持方块——逐模块
+  圆点化会打散 7×7 定位基准，实测扫不出）/圆角/圆形/叶形（evenodd 挖洞实现）。
+- **装饰**（绘制顺序 背景→色块→二维码→Logo→文字）：背景图（cover 铺满 + QR 区
+  半透明白板保对比）；中心 Logo（≤22%、方裁，沿用）；色块 1-6 个（百分比坐标 +
+  颜色）；文字 1-4 条（上/下/左/右 + 宋/黑/楷/系统 + 字号 + 颜色，左右旋转排）。
+- **下载**：PNG / JPG / SVG（画布栅格内嵌 data-URL 的合法 SVG）。
+- **实测修掉的坑（重要）**：
+  ① roundedPath 内部的 beginPath 会把 evenodd 挖洞的第一条路径清掉——
+     圆角/叶形定位环实际画成实心块（12 组合矩阵定位到问题），已改为调用方 begin；
+  ② 「跟随码点」若真把定位环逐模块圆点/圆角化，jsQR 解码全 FAIL——定位环保持方块；
+  ③ 默认色块位置 (0,0) 会盖住左上定位静区导致扫不出，默认位置移到底部中部；
+  ④ jsQR 对大模块画布（cell 15px）整图解码有怪癖，半尺度即可解出——12 组合矩阵
+     以半尺度复检 12/12 OK，数据载荷（WiFi 转义/中文/名片）逐一回读正确；
+  ⑤ 色块编辑行作为 .field（flex）的子项需要 min-width:0，否则把 375px 顶出横向
+     滚动（scrollWidth 727 → 360）。
+
+## A4. 字幕互转 ✅（新增 js/tools/subtitle.js + vendor/jschardet.min.js 3.1.4）
+
+- 注册 `{ id:'subtitle', cat:'文件文档', ic:'🎬' }`；index.html 引入 jschardet（UMD）。
+- **单文件**：上传/拖入/粘贴 → 格式自动识别（扩展名 + WEBVTT/[Script Info]/-->
+  /[mm:ss] 嗅探）+ 编码检测显示；输出 SRT/VTT/LRC/ASS；时间偏移毫秒（实测 +1500 生效）；
+  清理样式标签（{\...}、<i><b><u><font> 删除、&amp; 还原，实测）；预览前 20 行；下载。
+- **编码**：BOM（UTF-8/UTF-16LE/BE）→ jschardet → 严格 UTF-8 试解码失败按 GBK 兜底。
+  实测手拼 GBK 字节字幕「欢迎观看」正确解码不乱码。
+- **写出**：UTF-8 / UTF-8 BOM / GBK——TextEncoder 规范只支持 UTF-8，选 GBK 自动
+  降级 UTF-8 BOM 并在状态栏说明（诚实降级，不做假 GBK）。
+- **批量**：多文件统一输出格式 + JSZip 按需加载打包下载；实测 3 文件（srt/vtt/lrc）
+  → ZIP「完成：成功 3 个」。
+- LRC 无结束时间，按下一行起始自动推算（末条 +5s）。
+
+## 验收汇总
+
+| # | 验收项 | 结果 |
+|---|---|---|
+| A1 | 基础/科学切换记忆；5+3=8→×2=16 连续运算；运算符高亮；sin( 不报错；= 自动补全；历史回填；隐式乘法 | **PASS** |
+| A2 | 独立入口；9 配色；方向/速度/粗细/特效/镜像/横竖排；全屏隐藏工具栏；点击唤起 3s 自隐；返回退出；全屏内调字号换色；持久化 | **PASS** |
+| A3 | 7 类型生成+载荷回读；画布比例/尺寸/容错；单色/渐变；码点 3 样式；定位 4 样式（12 组合 12/12 可扫）；背景图/Logo/色块/文字；PNG/JPG/SVG | **PASS** |
+| A4 | SRT→VTT；GBK 识别不乱码；偏移 +1500；ASS 标签清理；LRC/ASS 互转；批量 ZIP | **PASS** |
+| 回归 | home/scicalc/danmu/qr/subtitle/teleprompter 375px 全部 0 溢出；Console 0 报错；teleprompter 无弹幕残留；红线静态检查（无新增 !important、无内联样式、无 tokens 外硬编码色） | **PASS** |
+
+## 环境备忘（Step 20 新增）
+
+① jschardet 从 unpkg 下载（jsdelivr 在本机连接被拒）；341KB，标准 UMD，script 引入即挂全局。
+② LB.lock 500ms 防连点会吞掉 <500ms 间隔的自动化点击——连续两次「生成」必须间隔 ≥600ms，
+   否则表现为"设置没生效"的假象（本轮 3 次误判皆源于此）。
+③ jsQR 对大模块（cell≥15px）整图解码会失败、对带非码区内容的画布也偶发失败——
+   可靠验证法 = 裁剪 QR 区域 + 半尺度后再喂 jsQR。
+④ ZCode IAB 截图偶发 3s 超时，等待后重试即可；全屏态截图是渲染残影，以 rect 实测为准。
+⑤ 本机无 python/node/powershell，HTTP 服务器用 JDK 单文件 `Serve.java`（已加
+   Cache-Control: no-store，避免改码后浏览器缓存旧 JS 造成"修了没生效"）。
+
+---
+
+# Step 19 — 6 项修复（完成记录）
+
+> 承接 Step 18。红线全程遵守：复制走 LB.copyNow；无新增 !important；无内联样式；
+> 新增颜色全部走 tokens 变量；界面上不标注数据来源。
+
+## 一、手机版导航条贴底 ✅
+
+- `css/layout.css`：新增 `@media (max-width:768px){ .tabbar{ bottom:0; padding-bottom:6px } }`。
+  桌面默认 `bottom:calc(8px + env(safe-area-inset-bottom))` 在手机端上浮，现改为真贴底；
+  不叠加 safe-area（会再次上浮），保留完整 22px 圆角，iPhone 底部横条盖 4-6px 可接受。
+- 任务书片段里的 `!important` 未使用：规则与桌面定义同特异性且位于其后，天然覆盖（红线）。
+- 实测 375×812：tabbar 距视口底 0px、圆角 22px。
+
+## 二、首页搜索框吸顶 + 分类重排 ✅
+
+- 顺序改为：header → hero → 搜索框 → 分类 chips → 最近使用 → 工具网格
+  （`home.js` 的 SEARCH_HTML 把 #homeCatNav 移到 #recentSec 之前）。
+- `home.css`：搜索框紧凑化（高 46px、圆角 14px、var(--card) 底、var(--line) 边），
+  新增 `.search-wrap.is-stuck`（毛玻璃 blur(16px) + 底部分隔线 var(--line)）。
+- `home.js` 新增 `setupStickySearch()`：IntersectionObserver（threshold:1，
+  rootMargin 按 header 实测高度 + 1px 收缩根），吸顶时切 is-stuck。
+- 实测：滚动 900px 后 is-stuck=true、backdrop-filter=blur(16px)。
+
+## 三、小说阅读器重构 ✅（js/tools/reader.js + tools.css rd-* 区）
+
+1. **全屏逻辑**：全屏作用对象 = 整个 `#rdRead` 容器（顶栏/内容/底部工具栏/设置面板/目录抽屉
+   全部移进容器内）；新增顶栏 ⛶ 全屏按钮 `toggleFullscreen()`（按 `document.fullscreenElement`
+   判定方向，try/catch + toast）；`fullscreenchange` 同步按钮文案，退出后可再次进入。
+   实测（真实点击）：进入→退出→再进入→再退出 四连切换全部成功。
+   ※ 自动化里合成 click 重进失败属"无用户手势"的浏览器安全限制，真实手势不受影响。
+2. **UI 精美化**：毛玻璃顶栏（`color-mix` 88% + blur16，下滑隐藏 translateY(-100%)、上滑显示）；
+   内容区 max-width 640 居中、柔和排版；目录抽屉从左侧滑入（当前章节高亮 + scrollIntoView）；
+   设置面板底部抽屉：字体宋/黑/楷/**系统**、字号滑块 14-26px、行距 1.4/1.6/1.8/2.2、
+   背景纸白/米黄/护眼绿/夜间黑、亮度滑块（内容上叠半透明暗层，色取 --rd-night，不用 filter）。
+3. **书架优化**：网格 2-3 列；每本书 = 书名首字渐变封面色块 + 书名 + 章节字数 + 进度百分比
+   + 阅读时长（每秒累计）；点击/长按出操作弹层（继续阅读 / 重命名（内联输入框） / 删除）；
+   空状态「📚 书架空空如也 + 上传第一本书」按钮。
+4. **存储**：新键 `litebox_reader_books`（数组，含 progress.percent / settings 每本书独立 /
+   readSec / lastReadAt）；旧键 `litebox_reader` 自动迁移（实测通过）；全局默认设置存
+   `litebox_reader_settings`，打开书时合并书内覆盖。
+
+## 四、摇骰子改 CSS 3D 循环动画 ✅（js/tools/dice.js + tools.css dc-* 区）
+
+- 按任务书推荐简化方案整体重写：移除 Three.js / GLTFLoader / dice.glb（约 600KB），
+  纯 CSS 3D 立方体（6 面 SVG 内嵌点阵，零网络请求）坐在圆骰盘上。
+- 「摇一次」或点击骰盘 → 5 颗骰子用 WAAPI 播放同一段翻滚关键帧（2s，逐颗错开 80ms），
+  末帧直接落在随机点数朝向（fill:'forwards'），点击即循环重播；随机一律 LB.rng。
+- 两个实测修掉的坑：
+  ① CSS 坐标 +Y 朝下，f5（视觉顶面）out=[0,-1,0]、f2（底面）out=[0,1,0]，ORIENT 的
+     2/5 两值极易写反（终态 = rotateY(b) rotateX(a)）；
+  ② 末帧 Y 角不能用 540（= 360+180，多半圈，落定的是对面点数——6 轮校验全部
+     "显示总点数=对面之和"），已改 720（2 整圈，从 80% 的 450deg 继续向前转）。
+- 修后连摇 6 次，矩阵法逐颗复检落定面：6/6 总点数与画面完全一致。
+- 比大小 / 玩家名单 / 历史记录玩法全部保留。
+
+## 五、大模型 API 扩到 15 家 + 国内访问列 ✅
+
+- `vendor/dict/llm-apis.js`：5 家 30 模型 → **15 家 76 模型**
+  （新增 Meta/Mistral/xAI/智谱/通义/豆包/混元/文心/星火/MiniMax）；每个模型带
+  `accessFromCN: 'direct' | 'proxy' | 'partial'`（兼容旧 cnAccessible 字段，UI 侧归一化）。
+- `js/tools/llmapis.js`：表格新增「国内访问」列（🌏 直连绿 / 🔀 代理黄 / ⚠️ 不稳定灰，
+  色取 --ok/--warn/--fg3）；新增筛选 chips「🌐 全部 / 🌏 直连 / 🔀 代理」，
+  与搜索、厂商筛选叠加生效；筛选命中时分组自动展开。
+- 实测：15 家 76 模型、全部带 accessFromCN、直连/代理筛选互斥正确、375px 无溢出。
+
+## 六、文档矫正修复 ✅（js/tools/docscan.js）
+
+- **修复 1 · 角点强制排序**：新增 `orderCorners()`，计算 H 之前把四个角点按几何位置
+  排成 TL→TR→BR→BL（按 y 分组上下边、组内按 x 分左右）——手柄与下标绑定，用户把角点
+  拖过界后顺序错乱正是"拉正错位"的成因之一；`targetSize()` 改为吃排序后的角点。
+- **修复 2 · 映射方向（真正的根因）**：像素循环做的是「目标→源」反向映射，但旧代码把
+  **src→dst** 方向的单应性矩阵直接当反向映射用（任务书修复代码同样方向不一致），
+  采样点整体坍缩到源图左上角——正是用户截图"一坨错位色块 + 斜线"。已改为
+  `getPerspectiveTransform(dst, src)` 求逆映射。
+- **修复 3 · 最小间距**：任两角点距离 < 20px 时禁止拉正，toast「四角不能重合，请把太近的
+  角点分开一点」（实测拦截成功）；「重置四角」按钮原有保留。
+- 四色象限测试图（左上红/右上绿/右下蓝/左下黄）+ 角点乱序拖动后拉正：输出四象限
+  颜色与源图一一对应（match=true），修复前输出整片坍缩为红色。
+
+## 验收汇总
+
+| # | 验收项 | 结果 |
+|---|---|---|
+| 1 | 手机版导航条贴底（375×812，bottom=0，圆角 22px） | **PASS** |
+| 2 | 搜索框吸顶毛玻璃（is-stuck + blur16px）；首页顺序 hero→搜索→chips→最近→网格 | **PASS** |
+| 3 | 阅读器多次全屏（真实点击四连切换）；全屏内设置/目录可点；UI 精美；书架封面+进度+时长+操作菜单 | **PASS** |
+| 4 | CSS 3D 骰子，点击循环播放，落定面与总点数 6/6 一致 | **PASS** |
+| 5 | 15 家 76 模型 + 国内访问列 + 直连/代理筛选 | **PASS** |
+| 6 | 角点乱序拉正正确；<20px 拦截 | **PASS** |
+| 回归 | 首页/骰子/速查/矫正/阅读器/party/wheel 375px 全部 0 横向溢出；Console 0 报错；红线静态检查（!important 仅 base.css 3 处既有例外、无新增硬编码色、无内联样式） | **PASS** |
+
+## 环境备忘（Step 19 新增）
+
+① 本机无 python/node/powershell，HTTP 服务器用 JDK 单文件源码 `Serve.java`
+   （`java Serve.java public 8931`）替代 `python -m http.server`。
+② ZCode IAB webview 的全屏状态切换延迟大（>800ms）且退出全屏后合成器有残影——
+   截图怪异不代表布局错误，以 getBoundingClientRect 实测为准；
+   合成 click（element.click()）无 transient activation，重进全屏会被浏览器拒绝，
+   必须用 Playwright 真实点击验证全屏链路。
+③ IAB 不支持 filechooser，文件上传类测试用 DataTransfer + DragEvent('drop') 派发；
+   docscan 取色验证需临时置空 LB.img.whiteEnhance 排除白纸增强干扰。
+
+---
+
+# Step 21 — 阅读器 + 二维码装饰 + 导航条弹层修复（完成记录）
+
+> 承接 Step 20。红线全程遵守：无新增 !important（全仓 !important 仍只有 base.css 的
+> [hidden] 与 prefers-reduced-motion 三处，其余命中都在注释里）；无新增内联样式；
+> 新增颜色全部走 tokens 变量（--mask-bg-soft / --tabbar-h / --tabbar-bottom /
+> --sheet-gap / --sheet-bottom）。
+
+## B1. 小说阅读器全面修复 ✅（js/tools/reader.js + css/tools.css）
+
+- **根因（面板关不掉 / 全屏被遮挡）**：`ui/sheet.js` 在 document **捕获阶段**匹配
+  `[data-close]` 并 `stopPropagation()`，阅读器面板的关闭按钮与遮罩点击事件永远到不了
+  reader.js → 设置面板打开后关不掉、目录抽屉挡住整屏。
+  → 阅读器改用独立的 `[data-reader-close]`，与全站弹层彻底分流（sheet.js 一行没改逻辑）。
+- **修复 1 · PanelManager 中央控制器**：`current` 单值状态，open(A) 先 close()，
+  面板与遮罩统一 `is-open` 类切换；设置 / 目录共用 `#reader-mask`，书架操作面板自带一层
+  `.reader-mask`（同类同规则）。
+- **修复 2 · 层叠与指针事件**：`.reader-mask` z1000、面板 z1010（> 阅读内容），
+  **关闭态 pointer-events:none**（实测：关闭后 pointerEvents=none，内容区照常可点）；
+  关闭态同时 `visibility:hidden`（延后 0.3s 切换，不切断滑出动画），面板按钮不再留在
+  Tab 顺序与读屏树里。
+- **修复 3 · 翻页模式**：`applyPageMode()` 给 `.reader-content` 挂 `page-mode` /
+  `scroll-mode`；`paginateContent()` 按容器可视高度实测每个段落坐标切页（超长段落再按
+  整页高度补切，翻页不会跳过尾部）。实测：页滚动位置 0 → 178 → 356 → 535，回退 356 → 178；
+  跨页边界自动换章；字号 / 行距 / 字体 / 全屏尺寸变化后自动重切。
+  刻意不用 `scroll-behavior:smooth`——动画途中读 scrollTop 会把页码读错，连点即乱（实测踩过）。
+- **修复 4 · 工具栏三段式**：`.reader-topbar` = `.tb-group-left`（← 书架 / 目录）+
+  `.tb-title`（flex:1 居中省略号）+ `.tb-group-right`（⛶ 全屏 / 设置），gap 8px；
+  原来五个子项平铺留下的"设置左边空白"由 flex 自动补齐。≤560px 收紧按钮内边距给书名留宽度。
+- **修复 5 · 全屏容器**：`#rdRead` 内含 工具栏 + 内容 + `#reader-mask` + 两个面板，
+  全屏时面板仍在全屏层内。实测（容器撑满视口模拟）：遮罩 528×551 覆盖容器、设置面板
+  底边贴容器底、目录抽屉满高 320px 滑出，× / 遮罩均能关闭。
+- 验收实测：设置开→× 关、目录开→遮罩关、目录跳章（4/6）、关后面板 pointer-events:none、
+  翻页 chip 的 `is-active` 与内容类名同步、中部点击照常切换底部工具栏。
+
+## B2. 二维码装饰元素布局 ✅（js/tools/qr.js + css/tools.css）
+
+- **根因**：装饰区块挂在 `.field` 上，而 `.field>label{white-space:nowrap}` 让长说明
+  不肯换行，把同行按钮挤到只剩几像素宽 → 「选择背景图」被压成竖排。
+- 改成任务书结构：`.qr-decoration-grid`（手机端单列）+ `.qr-decoration-row`
+  （`flex-wrap:wrap`，允许换行不挤压）+ `.qr-label`（`flex:1 1 auto;min-width:0`）+
+  按钮 `flex:0 0 auto;white-space:nowrap;min-width:100px`。ID 对齐任务书：
+  `qrBgPick / qrLogoPick / qrBlockAdd / qrTextAdd`（原 qrAddBlock、qrAddText 改名）。
+- 色块 / 文字的参数行（X/Y/宽/高/颜色/✕）在 ≤560px 由「横向滚动」改为换行排布——
+  原来 ✕ 删除按钮被推到屏幕外，手机上加得掉删不掉。
+- 375px 实测：四个按钮分别 110 / 100 / 114 / 114px 宽、43px 高（单行不竖排），
+  `documentElement.scrollWidth === clientWidth`（0 横向溢出）；生成 495×545 二维码 +
+  色块 + 文字装饰均正常。
+
+## B3. 导航条 + 弹层交互 ✅（js/ui/sheet.js + js/ui/tabbar.js + css/layout.css + tokens.css）
+
+- **撤销隐藏导航条**：删掉 sheet.js 的 `body.sheet-open` 增删与 layout.css 的
+  `body.sheet-open .tabbar{display:none}`。
+- **弹层贴着导航条上方**：`.sheet` 改 fixed，`bottom:var(--sheet-bottom)`
+  （= 导航条高 64 + 导航条距底 + 8px 间隙，手机端 --tabbar-bottom 归零自动跟着落下）；
+  上下都 22px 圆角；`max-height:calc(100dvh - var(--sheet-bottom) - 60px)`。
+- **层叠**：`.sheet-mask` z-index 400 → 200（低于 `.tabbar` 220）→ 导航条浮在遮罩上；
+  遮罩 `--mask-bg-soft`（.42 → .28）+ blur 12 → 6px。
+- **动画**：`translateX(-50%) translateY(30px) scale(.96)` → `translateY(0) scale(1)`，
+  遮罩只管 opacity、弹层只管 transform+opacity，分别过渡不抖。
+- 配套：导航条现在浮在遮罩上，点首页 / 搜索 / 收藏时 tabbar.js 主动 `sheet.close()`
+  （Step 13 时期弹层一开导航条就看不见，不需要这一步）。
+- 375px 实测：弹层底边与导航条顶边间隙 = 8px；遮罩 rgba(10,14,25,.28) + blur(6px)；
+  我的 ↔ 分类来回切换弹层锚位不变（top 235 → 60 → 235，bottom 恒差 8px）；
+  点遮罩关闭后导航条原位不动（top 位移 0）；0 横向滚动。
+
+## 验收汇总（Step 21）
+
+| # | 验收项 | 结果 |
+|---|---|---|
+| 1 | 设置面板开 / × 关 / 遮罩关；目录抽屉开 / 关 | **PASS** |
+| 2 | 关闭后能正常阅读、翻页、点其他按钮（pointer-events 实测 none） | **PASS** |
+| 3 | 翻页模式「滚动 / 点击翻页」可切换并真正生效 | **PASS** |
+| 4 | 工具栏三段式无空白；全屏容器内含遮罩与面板 | **PASS**（全屏 API 在本机 IAB 不可用，按容器撑满视口实测几何） |
+| 5 | 手机端装饰元素按钮单行不竖排、区域单列 | **PASS** |
+| 6 | 导航条浮在遮罩上、弹层贴其上方 8px、切换锚位不变、关闭后原位不动 | **PASS** |
+| 回归 | 首页 / 二维码 / 阅读器 375px 0 横向溢出；真实点击链路 Console 0 报错；红线静态检查通过 | **PASS** |
+
+---
+
+# Step 22 — 阅读器沉浸模式 + 文档矫正换 jscanify + 工具清理（完成记录）
+
+> 承接 Step 21。红线全程遵守：无新增 !important（全仓仍只有 base.css 三处既有例外）；
+> 无新增内联样式（阅读器主题色改为把值写成 CSS 变量 --rd-page-bg / --rd-ink-live 传给样式表）；
+> 新增颜色全部走 tokens 变量（--mask-bg / --mask-bg-soft / --rd-* / --sheet-shadow）。
+
+## C1. TXT 阅读器：放弃 Fullscreen API，改页内沉浸 ✅（js/tools/reader.js + css/tools.css）
+
+- **修复 1 · 删除全屏 API**：`requestFullscreen / exitFullscreen / fullscreenchange /
+  updateFsBtn / exitFullscreenSoon / toggleFullscreen` 全部移除（含 Step 18 的"进书自动全屏"）。
+  真全屏会连系统状态栏一起隐藏 → 挖孔摄像头压在正文第一行；切回应用还会被强制横屏。
+- **修复 2 · 沉浸容器**：`#rdRead` = `.reader-fullscreen-container`
+  （`position:fixed;inset:0;z-index:300`，高于导航条 220 / 弹层遮罩 200，低于 toast 600）。
+  顶栏 `height:calc(48px + env(safe-area-inset-top))` + `padding-top:env(safe-area-inset-top)`
+  → 状态栏区域保留、文字不被摄像头遮挡；底栏 `padding-bottom:env(safe-area-inset-bottom)`，
+  内容区上下 padding 分别给两栏让位。实测 375px：容器 375×740、顶栏 48、底栏 98 贴底、
+  0 横向溢出。
+- **修复 3 · 点屏幕中间切工具栏**：`setImmersive(on)` 切 `body.reader-immersive` +
+  两栏 `.auto-hide`（顶栏上滑出、底栏下滑出）；顶栏右组按钮文案在「⛶ 沉浸 / ⛶ 退出沉浸」间切换。
+  点内容区中部即收起 / 唤回；选中文字时不吃点击。滚动方向的临时隐藏仍用 `rd-hide`，
+  与 `auto-hide` 两套机制互不干扰。实测：点中间 → body 类 + transform 生效 → 按钮变「退出沉浸」→ 再点复原。
+- **修复 4 · 翻页 4 种**：`scroll 滚动 / tap 点击翻页 / slide-up 上下滑动 / curve 仿真翻页`，
+  旧存储值 `page` 自动迁移为 `tap`。
+  · tap / curve：点内容区左右半屏整页跳，跨页边界自动换章（实测 0 → 324 → 616 → 回退 324）；
+  · slide-up：给每页起点插一个 0 高 `.rd-snap` 锚点（in-flow 盒子做 snap 目标比 absolute 可靠），
+    容器 `scroll-snap-type:y mandatory`（实测 snapType=y mandatory、8 个锚点 align:start）；
+  · curve：tap 的分页 + `#rdTurn` 一层 3D 纸面动画（perspective + rotateY(-78deg) + 阴影），
+    连点用「移除类 → 强制重排 → 再加类」重播。
+  分页仍只记录"每页起点的内容坐标"（不拆 DOM），超长段落按整页高度补切，翻页不会跳过内容；
+  切回 scroll 时锚点全部清理（实测 anchors=0）。字号 / 行距 / 转屏（resize + orientationchange）后自动重切。
+- **修复 5 · 书架与弹窗**：封面固定 100×140（≤560px 收到 76×106），一行一本（`.book-item`
+  横向 flex：封面 + 书名 + 章节字数 + 进度时长），不再一本书占半屏。
+  操作菜单改成居中卡片 `.book-action-sheet`（min(90vw,400px)、z 1100）+ 独立遮罩
+  `.book-action-mask`（z 1090、--mask-bg + blur 4px），三个操作各占一行
+  （实测按钮高 47px、相邻 top/bottom 不重叠、弹窗中心与视口中心偏差 0,0），
+  点遮罩 / × 均关闭。删除了旧的 `.rd-acts / .rd-act / .rd-rename` 底部抽屉样式。
+- 面板体系（Step 21 的 PanelManager / [data-reader-close] / pointer-events 兜底）保持不变，
+  实测设置与目录开 / 关、跳章、关闭后 pointer-events:none 全部正常。
+
+## C2. 文档矫正换 jscanify ✅（新增 vendor/jscanify.min.js + js/tools/docscan.js）
+
+- 任务书给的 `jscanify@1.1.0/dist/jscanify.min.js` 在 npm 包里不存在（只有 src/），
+  故按"单文件内含 OpenCV"的原意合成：`src/opencv.js`(8.98MB，wasm 以 data URI 内嵌，
+  无外部 .wasm 依赖) + `src/jscanify.js`(7.7KB) → `public/vendor/jscanify.min.js`（8.99MB）。
+- 只在第一次点「拉正」时动态加载（复用 `LB.router.loadScript` 的 Promise 缓存），
+  状态行提示「⏳ 正在准备文档矫正引擎（首次需加载约 9MB，稍等）…」；
+  OpenCV 是异步初始化，用轮询 `cv.Mat` 判定就绪（不用 onRuntimeInitialized：脚本可能已初始化完，
+  回调永远不触发）。
+- ★ 任务书示例 `const out = scanner.extractPaper(img,w,h)` 与真实 API 不符：
+  v1.1.0 是 `extractPaper(image, w, h, onComplete, cornerPoints)`，
+  且 cornerPoints 是 `{topLeftCorner,topRightCorner,bottomLeftCorner,bottomRightCorner}` 具名对象
+  （不是 4 元素数组）。已按真实签名调用，并把回调 Promise 化 + 30s 超时保护。
+- ★ 实测发现 jscanify 1.1.0 在 extractPaper 末尾多做了一次上下翻转，结果倒置
+  （在纸面顶部 4%~10% 处画的标记条出现在结果 90% 高度处）。已在 `unflip()` 里翻回正面，
+  并用相邻像素补掉 warp 边界采样留下的 1~3px 黑边；复测标记条回到 4% 高度、四边干净。
+- 兜底：引擎加载 / 执行失败 → 自动回退 Step 19 的自研反向映射算法，
+  toast「…已使用简化模式」，状态行标「简化模式（自研反向映射）」。实测断网模拟走通，
+  输出 307×452、方向正确。
+- UI 未动：上传区、四角手柄、拉正 / 重置四角 / 换图、结果区照旧（拖角实测精确到位）。
+
+## C3. 文档转换箱返回按钮 ✅（js/router.js + js/tools/docbox.js）
+
+- 根因：docbox.js 的 mount 里漏了 `[data-back]` 绑定（全站 120+ 工具各自手写这条绑定，漏一个坏一个）。
+- `LB.router.init()` 里加全局委托兜底：`.back, [data-back]` → `LB.hash.go(data-go || 'home')`。
+  只认 `.back` / `[data-back]`，不能裸认 `[data-go]`——「我的」面板里的最近使用 chip 也用
+  data-go 跳工具，裸认会把它们全变成回首页。
+- docbox 自己补上绑定，并按任务书给按钮加 `data-go="home"`。实测点击 → hash=#home、首页激活。
+
+## C4. 工具清理 ✅
+
+- 骰子「比大小」整块删除：`pgCompare` 在本仓库对应 `#dcVs` 那套（versusGo / openVersus /
+  pipHTML / getNames / saveNames + 玩家名单 details + KEY_NAMES 存储 + .dc-vs-* CSS）。
+  实测：无 ⚔️ 按钮 / 无比大小卡片 / 无名单输入框，摇一次仍正常（总点数 16、历史 1 条、彩蛋提示正常）。
+- 表情包工具下线：删 `public/js/tools/meme.js`、`public/vendor/meme-templates/`（4 组模板）、
+  registry 条目、router 本地声明名单里的 'meme'、tools.css 的 `.mm-*` 全部样式。
+  全站已无 meme 引用；旧 `#meme` 链接落到统一的"工具加载失败"兜底页。
+
+## C5. 导航条 toggle + 高亮 ✅（js/ui/sheet.js + js/ui/tabbar.js）
+
+- `LB.ui.sheet.isOpen(id)`（!hidden && .lb-open）；tabbar 点「分类 / 我的」时若已开就 close（toggle）。
+- 弹层打开 → 对应 tab 加 .on；关闭 → 恢复高亮（只有停在首页时才点亮「首页」，
+  工具页上按 ESC 关闭弹层不会误点亮）。
+- 顺带修掉一个真实竞态：`close()` 的 320ms 延时 `hidden=true` 会把期间新打开的弹层一起藏掉
+  （双击「我的」收起后马上点「分类」即命中）。改为延时回调里判断 `if (!m.classList.contains('lb-open'))`。
+  实测：close 后同帧 open('catSheet') → catSheet 保持可见、meSheet 正确隐藏。
+- Step 21 的层叠关系不变：导航条 z220 浮在遮罩 z200 之上，弹层底边距导航条顶边 8px。
+
+## 验收汇总（Step 22）
+
+| # | 验收项 | 结果 |
+|---|---|---|
+| 1 | 沉浸模式保留状态栏（safe-area-inset-top）+ 不再调 Fullscreen API | **PASS**（结构实测；真机刘海需用户复核） |
+| 2 | 点屏幕中间切换工具栏 / 沉浸按钮文案同步 | **PASS** |
+| 3 | 4 种翻页：滚动 / 点击翻页 / 上下滑动 / 仿真翻页 | **PASS**（tap 页码推进、slide-up snap 锚点、curve 动画重播、切回 scroll 锚点清空） |
+| 4 | 书架封面固定尺寸 + 操作弹窗按钮不重叠、点击生效 | **PASS** |
+| 5 | 顶部工具栏三段式无空白 | **PASS** |
+| 6 | 文档矫正：拖四角 → jscanify 拉正，方向正确 | **PASS**（含 1.1.0 倒置缺陷的 unflip 修正） |
+| 7 | 首次加载有提示；引擎失败回退简化模式 | **PASS**（断网模拟验证） |
+| 8 | 文档转换箱返回可回首页 | **PASS** |
+| 9 | 骰子无比大小 / 表情包已移除 | **PASS** |
+| 10 | 导航条 toggle（开→关）、tab 高亮、点遮罩关闭 | **PASS** |
+| 回归 | 11 个页面 375px 0 横向滚动；Console 0 报错；红线静态检查通过 | **PASS** |
+
+## 已知遗留（Step 22 发现，未在本次范围内修）
+
+- `LB.img.whiteEnhance` 由 fix.js 在自身 mount 时挂到 LB.img 上，而 fix.js 是按需加载的工具脚本：
+  直接进 docscan 时它还没执行 → 白纸增强静默跳过（状态行会诚实标「白纸增强不可用，未应用」）。
+  彻底修法是把 whiteEnhance 下沉到 image-common.js（两个工具共用），建议放到下一步。

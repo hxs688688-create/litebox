@@ -1,6 +1,17 @@
-/* LiteBox v5 · tools/pdf.js — PDF 工具箱（图片转 PDF / PDF 转图片 / 合并拆分 / 页码水印）
-   vendor 按需加载：pdf-lib（tab1 预热 + 各写操作）、PDF.js + worker（tab2 预热 + 转换）
-   状态按 tab 独立保存，切换不清空；unmount revoke 全部 objectURL */
+/* LiteBox v5 · tools/pdf.js — PDF 工具箱
+   Tab：图片转 PDF / PDF 转图片 / 合并拆分 / 页码水印 / 签名盖章 / 加密解密
+   vendor 按需加载：pdf-lib（写操作）、PDF.js + worker（渲染预览与转换）
+   状态按 tab 独立保存，切换不清空；unmount revoke 全部 objectURL
+
+   【Step 15 · B2 的两处技术说明】
+   1) 任务书说「pdf-lib ≥1.17.0 内置加密」——**不成立**。官方 pdf-lib 至今（1.17.1）没有
+      encrypt 能力，仓库里那条 `PDFDocument.load is encrypted` 只是「拒绝加载」的错误文案。
+      因此这里把 vendor 换成 **@cantoo/pdf-lib**（pdf-lib 的维护分支，API 完全兼容，
+      额外提供 `doc.encrypt({userPassword, ownerPassword, permissions, algorithm})`
+      与 `PDFDocument.load(bytes, { password })`），默认 AES-256。
+   2) 解密**不能**只 `load({password})` 再 `save()`：实测解密后的上下文仍保留原文件的
+      /Encrypt 残留对象，重新保存出来的文件 Adobe / Chrome 依然判定为加密。
+      正确做法是新建一个空文档 + `copyPages` 把页面搬过去，得到真正无加密的 PDF。 */
 (function () {
   'use strict';
 
@@ -68,6 +79,21 @@
   let p3SplitFile = null;  /* 拆分 */
   let p4NumFile = null;    /* 加页码 */
   let p4WmFile = null;     /* 加水印 */
+
+  /* Step 15 · B1 签名 / 盖章 */
+  let p5File = null;       /* 待签名 PDF */
+  let p5Pdf = null;        /* PDF.js 文档（预览用） */
+  let p5PageNo = 1;
+  let p5PageCount = 0;
+  let p5Sig = null;        /* { base, canvas, w, h, url } 去白底后的签名图 */
+  let p5Place = null;      /* { rx, ry, rw } 相对页面尺寸的比例 */
+  let p5Angle = 0;
+  let p5AllPages = true;
+
+  /* Step 15 · B2 加密 / 解密 */
+  let p6EncFile = null;
+  let p6DecFile = null;
+  let p6Sub = 'enc';
 
   const urls = [];         /* 全部 objectURL 追踪，unmount 统一 revoke */
 
@@ -432,9 +458,15 @@
   function setTab(t) {
     tab = t;
     $$('.pd-tab', rootEl).forEach(b => b.classList.toggle('on', b.dataset.tab === t));
-    ['ip', 'p2', 'p3', 'p4'].forEach(x => { const el = $('#pd-' + x, rootEl); if (el) el.hidden = x !== t; });
+    ['ip', 'p2', 'p3', 'p4', 'p5', 'p6'].forEach(x => { const el = $('#pd-' + x, rootEl); if (el) el.hidden = x !== t; });
     /* 切到转图片 tab 时预热 PDF.js（worker 在首次转换时由 pdf.js 拉起） */
     if (t === 'p2') loadPDFJS().catch(() => {});
+    /* Step 15：签名 tab 需要 PDF.js 渲染预览；加密 tab 需要 pdf-lib */
+    if (t === 'p5') {
+      loadPDFJS().catch(() => {});
+      if (p5Pdf) renderSigStage();   /* 切回来时按当前容器宽度重渲染，避免宽度为 0 */
+    }
+    if (t === 'p6') loadPDFLib().catch(() => {});
   }
 
   function setSub3(s) {
@@ -453,6 +485,348 @@
     if (w) w.hidden = s !== 'wm';
   }
 
+  /* ================= Tab 5 · 签名 / 盖章 ================= */
+
+  /* 去白底：亮度 ≥240 全透明，200~240 之间线性过渡（保留笔画边缘，避免一圈白边） */
+  function removeWhiteBg(canvas) {
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const d = img.data;
+    for (let i = 0; i < d.length; i += 4) {
+      const lum = (d[i] + d[i + 1] + d[i + 2]) / 3;
+      if (lum >= 240) d[i + 3] = 0;
+      else if (lum > 200) d[i + 3] = Math.round(255 * (240 - lum) / 40);
+    }
+    ctx.putImageData(img, 0, 0);
+  }
+
+  /* 裁掉四周全透明的空白，让签名贴边 —— 否则放置位置会明显偏 */
+  function trimCanvas(canvas) {
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    const W = canvas.width, H = canvas.height;
+    const d = ctx.getImageData(0, 0, W, H).data;
+    let x0 = W, y0 = H, x1 = -1, y1 = -1;
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        if (d[(y * W + x) * 4 + 3] > 8) {
+          if (x < x0) x0 = x;
+          if (x > x1) x1 = x;
+          if (y < y0) y0 = y;
+          if (y > y1) y1 = y;
+        }
+      }
+    }
+    if (x1 < 0) return canvas;   /* 整张图都被判成白色 → 原样返回，交给用户自己换图 */
+    const w = x1 - x0 + 1, h = y1 - y0 + 1;
+    const out = document.createElement('canvas');
+    out.width = w; out.height = h;
+    out.getContext('2d').drawImage(canvas, x0, y0, w, h, 0, 0, w, h);
+    return out;
+  }
+
+  /* 按倾斜角重绘签名（旋转留透明边，保证后续放置仍是轴对齐矩形） */
+  function applySigAngle() {
+    if (!p5Sig) return;
+    const src = p5Sig.base;
+    const rad = p5Angle * Math.PI / 180;
+    const cos = Math.abs(Math.cos(rad)), sin = Math.abs(Math.sin(rad));
+    const w = Math.max(1, Math.ceil(src.width * cos + src.height * sin));
+    const h = Math.max(1, Math.ceil(src.width * sin + src.height * cos));
+    const c = document.createElement('canvas');
+    c.width = w; c.height = h;
+    const x = c.getContext('2d');
+    x.translate(w / 2, h / 2);
+    x.rotate(rad);
+    x.drawImage(src, -src.width / 2, -src.height / 2);
+    p5Sig.canvas = c;
+    p5Sig.w = w; p5Sig.h = h;
+    p5Sig.url = c.toDataURL('image/png');
+    layoutSig();
+  }
+
+  /* 默认落点：页面右下方（真实签名的常见位置）。
+     上传完签名图立刻自动放一枚，用户能马上看到效果，再拖/点微调。 */
+  function autoPlace() {
+    const cv = $('#p5Cv', rootEl);
+    if (!cv || !p5Sig || p5Place) return;
+    const rw = clamp((parseFloat($('#p5Scale', rootEl).value) || 28) / 100, 0.05, 0.9);
+    const hRatio = rw * cv.width * (p5Sig.h / p5Sig.w) / cv.height;
+    p5Place = {
+      rx: clamp(0.62 - rw / 2, 0, Math.max(0, 1 - rw)),
+      ry: clamp(0.80 - hRatio / 2, 0, Math.max(0, 1 - hRatio)),
+      rw: rw
+    };
+    layoutSig();
+    renderSigHint();
+  }
+
+  async function loadSigImage(file) {
+    const img = await LB.img.load(file);
+    const c = document.createElement('canvas');
+    c.width = Math.max(1, img.naturalWidth);
+    c.height = Math.max(1, img.naturalHeight);
+    c.getContext('2d').drawImage(img, 0, 0);
+    removeWhiteBg(c);
+    const trimmed = trimCanvas(c);
+    p5Sig = { base: trimmed, canvas: trimmed, w: trimmed.width, h: trimmed.height, url: trimmed.toDataURL('image/png') };
+    p5Place = null;
+    applySigAngle();
+    autoPlace();
+    layoutSig();
+    renderSigHint();
+  }
+
+  async function openP5Pdf(file) {
+    p5File = file;
+    p5Pdf = null;
+    p5PageNo = 1;
+    $('#p5Ctl', rootEl).hidden = false;
+    $('#p5Stat', rootEl).textContent = '⏳ 正在解析 PDF…';
+    try {
+      await loadPDFJS();
+      const buf = await file.arrayBuffer();
+      p5Pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+      p5PageCount = p5Pdf.numPages;
+      $('#p5PageInfo', rootEl).textContent = '第 1 / ' + p5PageCount + ' 页';
+      $('#p5Stat', rootEl).textContent = '已选择：' + file.name + '（' + p5PageCount + ' 页）';
+      await renderSigStage();
+    } catch (e) {
+      $('#p5Stat', rootEl).textContent = '⚠️ PDF 解析失败：' + ((e && e.message) || '未知错误');
+      LB.toast('PDF 解析失败', 'err');
+    }
+  }
+
+  async function renderSigStage() {
+    const stage = $('#p5Stage', rootEl);
+    if (!stage) return;
+    if (!p5Pdf) { stage.innerHTML = '<p class="cd-note">上传 PDF 后在这里预览并放置签名。</p>'; return; }
+    const page = await p5Pdf.getPage(p5PageNo);
+    const vp1 = page.getViewport({ scale: 1 });
+    const maxW = Math.max(240, Math.min(720, (stage.clientWidth || stage.parentNode.clientWidth || 340)));
+    const scale = Math.min(1.6, maxW / vp1.width);
+    const vp = page.getViewport({ scale });
+    stage.innerHTML =
+      '<div class="p5-wrap" id="p5Wrap">' +
+      '<canvas id="p5Cv" width="' + Math.round(vp.width) + '" height="' + Math.round(vp.height) + '"></canvas>' +
+      '<img class="p5-sig" id="p5Sig" alt="签名预览" />' +
+      '</div>';
+    const cv = $('#p5Cv', rootEl);
+    await page.render({ canvasContext: cv.getContext('2d'), viewport: vp }).promise;
+    bindSigDrag();
+    /* 签名图先于 PDF 上传时，这里补一次自动落点 */
+    if (p5Sig && !p5Place) autoPlace();
+    layoutSig();
+    renderSigHint();
+  }
+
+  function sigBox(cvW, cvH) {
+    if (!p5Sig || !p5Place) return null;
+    const w = p5Place.rw * cvW;
+    return { w: w, h: w * (p5Sig.h / p5Sig.w) };
+  }
+
+  function layoutSig() {
+    const cv = $('#p5Cv', rootEl);
+    const el = $('#p5Sig', rootEl);
+    if (!cv || !el) return;
+    if (!p5Sig || !p5Place) { el.hidden = true; return; }
+    const box = sigBox(cv.width, cv.height);
+    el.hidden = false;
+    el.src = p5Sig.url;
+    el.style.left = (p5Place.rx * cv.width) + 'px';
+    el.style.top = (p5Place.ry * cv.height) + 'px';
+    el.style.width = box.w + 'px';
+    el.style.height = box.h + 'px';
+  }
+
+  function renderSigHint() {
+    const hint = $('#p5Hint', rootEl);
+    if (!hint) return;
+    if (!p5Pdf) { hint.textContent = '先上传 PDF。'; return; }
+    if (!p5Sig) { hint.textContent = '再上传签名 / 印章图片（白底会自动去掉）。'; return; }
+    if (!p5Place) { hint.textContent = '在预览图上点一下放置签名；拖动可微调位置。'; return; }
+    hint.textContent = '已放置 · 位置 ' + Math.round(p5Place.rx * 100) + '% / ' + Math.round(p5Place.ry * 100) +
+      '% · 宽度 ' + Math.round(p5Place.rw * 100) + '%（拖动可微调，也可以直接点预览图重新放置）';
+  }
+
+  /* 点击预览图 → 把签名中心放到点击处 */
+  function placeAt(evt) {
+    const cv = $('#p5Cv', rootEl);
+    if (!cv || !p5Sig) { if (!p5Sig) LB.toast('请先上传签名 / 印章图片', 'info'); return; }
+    const r = cv.getBoundingClientRect();
+    const px = clamp((evt.clientX - r.left) / r.width, 0, 1);
+    const py = clamp((evt.clientY - r.top) / r.height, 0, 1);
+    const rw = p5Place ? p5Place.rw : (parseFloat($('#p5Scale', rootEl).value) || 28) / 100;
+    const hRatio = rw * cv.width * (p5Sig.h / p5Sig.w) / cv.height;   /* 高度占页高比例 */
+    p5Place = {
+      rx: clamp(px - rw / 2, 0, Math.max(0, 1 - rw)),
+      ry: clamp(py - hRatio / 2, 0, Math.max(0, 1 - hRatio)),
+      rw: rw
+    };
+    layoutSig();
+    renderSigHint();
+  }
+
+  function bindSigDrag() {
+    const el = $('#p5Sig', rootEl);
+    const cv = $('#p5Cv', rootEl);
+    if (!el || !cv) return;
+    let dragging = false, sx = 0, sy = 0, srx = 0, sry = 0;
+    el.addEventListener('pointerdown', e => {
+      if (!p5Place) return;
+      dragging = true;
+      try { el.setPointerCapture(e.pointerId); } catch (_) {}
+      sx = e.clientX; sy = e.clientY;
+      srx = p5Place.rx; sry = p5Place.ry;
+      e.preventDefault();
+      e.stopPropagation();
+    });
+    el.addEventListener('pointermove', e => {
+      if (!dragging || !p5Place) return;
+      const r = cv.getBoundingClientRect();
+      const box = sigBox(cv.width, cv.height);
+      p5Place.rx = clamp(srx + (e.clientX - sx) / r.width, 0, Math.max(0, 1 - p5Place.rw));
+      p5Place.ry = clamp(sry + (e.clientY - sy) / r.height, 0, Math.max(0, 1 - box.h / cv.height));
+      layoutSig();
+      e.preventDefault();
+    });
+    const up = () => { dragging = false; renderSigHint(); };
+    el.addEventListener('pointerup', up);
+    el.addEventListener('pointercancel', up);
+  }
+
+  function dataURLtoBytes(url) {
+    const bin = atob(String(url).split(',')[1] || '');
+    const out = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+    return out;
+  }
+
+  async function sigToPDF() {
+    if (!p5File) { LB.toast('请先选择 PDF', 'err'); return; }
+    if (!p5Sig) { LB.toast('请先上传签名 / 印章图片', 'err'); return; }
+    if (!p5Place) { LB.toast('请在预览图上点一下放置签名', 'err'); return; }
+    const btn = $('#p5Go', rootEl);
+    const stat = $('#p5Stat', rootEl);
+    btn.disabled = true;
+    try {
+      await loadPDFLib();
+      const { PDFDocument } = PDFLib;
+      const doc = await PDFDocument.load(await p5File.arrayBuffer(), { ignoreEncryption: true });
+      const png = await doc.embedPng(dataURLtoBytes(p5Sig.canvas.toDataURL('image/png')));
+      const pages = doc.getPages();
+      const targets = p5AllPages
+        ? pages.map((_, i) => i)
+        : parsePageRange($('#p5Pages', rootEl).value, pages.length).map(n => n - 1);
+      if (!targets.length) { LB.toast('目标页为空，请检查页码', 'err'); return; }
+      const opacity = clamp((parseFloat($('#p5Op', rootEl).value) || 95) / 100, 0.1, 1);
+
+      targets.forEach(i => {
+        const page = pages[i];
+        const size = page.getSize();
+        const w = p5Place.rw * size.width;
+        const h = w * (p5Sig.h / p5Sig.w);
+        page.drawImage(png, {
+          x: p5Place.rx * size.width,
+          /* PDF 原点在左下角，预览是左上角 → 需要翻转 y */
+          y: size.height - p5Place.ry * size.height - h,
+          width: w,
+          height: h,
+          opacity: opacity
+        });
+      });
+
+      const bytes = await doc.save();
+      LB.img.download(new Blob([bytes], { type: 'application/pdf' }),
+        p5File.name.replace(/\.pdf$/i, '') + '-已签名.pdf');
+      stat.textContent = '✅ 已在 ' + targets.length + ' 页放置签名';
+      LB.toast('签名 PDF 已生成', 'ok');
+    } catch (e) {
+      stat.textContent = '⚠️ 生成失败：' + ((e && e.message) || '未知错误');
+      LB.toast('生成失败', 'err');
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  /* ================= Tab 6 · 加密 / 解密 ================= */
+
+  function setSub6(s) {
+    p6Sub = s;
+    $$('#p6Seg button', rootEl).forEach(b => b.classList.toggle('on', b.dataset.sub === s));
+    $('#p6EncBox', rootEl).hidden = s !== 'enc';
+    $('#p6DecBox', rootEl).hidden = s !== 'dec';
+  }
+
+  async function encryptPDF() {
+    if (!p6EncFile) { LB.toast('请先选择 PDF', 'err'); return; }
+    const user = $('#p6User', rootEl).value;
+    if (!user) { LB.toast('请输入用户密码（打开文件时需要）', 'info'); return; }
+    const owner = $('#p6Owner', rootEl).value || user;
+    const btn = $('#p6GoEnc', rootEl);
+    const stat = $('#p6EncStat', rootEl);
+    btn.disabled = true;
+    try {
+      await loadPDFLib();
+      const { PDFDocument } = PDFLib;
+      const doc = await PDFDocument.load(await p6EncFile.arrayBuffer(), { ignoreEncryption: true });
+      doc.encrypt({
+        userPassword: user,
+        ownerPassword: owner,
+        permissions: {
+          printing: $('#p6Print', rootEl).checked ? 'highResolution' : false,
+          copying: $('#p6Copy', rootEl).checked,
+          modifying: $('#p6Mod', rootEl).checked
+        }
+      });
+      const bytes = await doc.save();
+      LB.img.download(new Blob([bytes], { type: 'application/pdf' }),
+        p6EncFile.name.replace(/\.pdf$/i, '') + '-已加密.pdf');
+      stat.textContent = '✅ 已生成 AES-256 加密 PDF，打开时需要输入用户密码';
+      LB.toast('加密 PDF 已生成', 'ok');
+    } catch (e) {
+      const msg = (e && e.message) || '未知错误';
+      stat.textContent = '⚠️ 加密失败：' + msg;
+      LB.toast('加密失败：' + msg, 'err');
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  async function decryptPDF() {
+    if (!p6DecFile) { LB.toast('请先选择 PDF', 'err'); return; }
+    const pwd = $('#p6DecPwd', rootEl).value;
+    if (!pwd) { LB.toast('请输入密码', 'info'); return; }
+    const btn = $('#p6GoDec', rootEl);
+    const stat = $('#p6DecStat', rootEl);
+    btn.disabled = true;
+    stat.textContent = '⏳ 正在解密…';
+    try {
+      await loadPDFLib();
+      const { PDFDocument } = PDFLib;
+      const bytes = await p6DecFile.arrayBuffer();
+      const src = await PDFDocument.load(bytes, { password: pwd });
+      /* 关键：不能直接 src.save() —— 解密后的上下文仍带着原文件的 /Encrypt 残留对象，
+         重新保存出来的文件仍被判定为加密（实测 Adobe / Chrome 都会继续要密码）。
+         新建空文档 + copyPages 搬页面，才是真正无加密的输出。 */
+      const out = await PDFDocument.create();
+      const pages = await out.copyPages(src, src.getPageIndices());
+      pages.forEach(p => out.addPage(p));
+      const dec = await out.save();
+      LB.img.download(new Blob([dec], { type: 'application/pdf' }),
+        p6DecFile.name.replace(/\.pdf$/i, '') + '-已解密.pdf');
+      stat.textContent = '✅ 已解密并下载（' + pages.length + ' 页），新文件无密码';
+      LB.toast('解密完成', 'ok');
+    } catch (e) {
+      const raw = (e && e.message) || '';
+      const msg = /password|encrypt/i.test(raw) ? '密码错误，或该 PDF 并未加密' : raw || '未知错误';
+      stat.textContent = '⚠️ 解密失败：' + msg;
+      LB.toast('解密失败：' + msg, 'err');
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
   /* ================= 页面结构 ================= */
 
   function html() {
@@ -466,6 +840,8 @@
       '<button type="button" class="pd-tab" data-tab="p2">🏞️ PDF 转图片</button>' +
       '<button type="button" class="pd-tab" data-tab="p3">📑 合并 / 拆分</button>' +
       '<button type="button" class="pd-tab" data-tab="p4">#️⃣ 页码 / 水印</button>' +
+      '<button type="button" class="pd-tab" data-tab="p5">✍️ 签名 / 盖章</button>' +
+      '<button type="button" class="pd-tab" data-tab="p6">🔒 加密 / 解密</button>' +
       '</div>' +
 
       /* —— Tab 1 图片转 PDF —— */
@@ -566,7 +942,75 @@
       '</div>' +
       '</div>' +
 
-      '<p class="cd-note">所有处理均在本机浏览器完成，文件不会上传到任何服务器；扫描版 PDF 与加密 PDF 可能无法处理。</p>' +
+      /* —— Tab 5 签名 / 盖章 —— */
+      '<div class="card tool-sec set-card" id="pd-p5" hidden>' +
+      '<div class="dropzone" id="p5Drop">' +
+      '<span class="pd-dz-ic">📄</span><b>选择或拖入 PDF</b><small>要签名 / 盖章的 PDF</small>' +
+      '<input type="file" id="p5File" accept="application/pdf,.pdf" hidden />' +
+      '</div>' +
+      '<div id="p5Ctl" hidden class="pdf-panel">' +
+      '<div class="dropzone p5-sigdrop" id="p5SigDrop">' +
+      '<span class="pd-dz-ic">✍️</span><b>选择签名 / 印章图片</b><small>PNG / JPG 均可，白底会自动去掉</small>' +
+      '<input type="file" id="p5SigFile" accept="image/*" hidden />' +
+      '</div>' +
+      '<div class="p5-toolbar">' +
+      '<button class="btn btn-ghost btn-sm" id="p5Prev" type="button">← 上一页</button>' +
+      '<span class="p5-pageinfo" id="p5PageInfo">第 1 页</span>' +
+      '<button class="btn btn-ghost btn-sm" id="p5Next" type="button">下一页 →</button>' +
+      '</div>' +
+      '<div class="p5-stage" id="p5Stage"></div>' +
+      '<p class="cd-note" id="p5Hint">先上传 PDF。</p>' +
+      '<div class="pdf-form">' +
+      '<label class="pz-lab">签名宽度 %<input class="inp" id="p5Scale" type="range" min="8" max="80" step="1" value="28" /></label>' +
+      '<label class="pz-lab">倾斜角度 °<input class="inp" id="p5Angle" type="range" min="-25" max="25" step="1" value="0" /></label>' +
+      '<label class="pz-lab">不透明度 %<input class="inp" id="p5Op" type="number" min="20" max="100" value="95" /></label>' +
+      '</div>' +
+      '<label class="chk-row"><input type="checkbox" id="p5All" checked><span>应用到所有页</span></label>' +
+      '<label class="pz-lab pdf-wide" id="p5PagesRow" hidden>指定页<input class="inp" id="p5Pages" type="text" placeholder="如 1,3-5；留空 = 全部" /></label>' +
+      '<button class="btn btn-main" id="p5Go" data-act="p5Go" type="button">✍️ 生成并下载</button>' +
+      '<div class="pdf-stat" id="p5Stat">上传 PDF 与签名图后即可生成</div>' +
+      '</div>' +
+      '</div>' +
+
+      /* —— Tab 6 加密 / 解密 —— */
+      '<div class="card tool-sec set-card" id="pd-p6" hidden>' +
+      '<div class="seg" id="p6Seg">' +
+      '<button type="button" class="on" data-sub="enc">🔒 加密</button>' +
+      '<button type="button" data-sub="dec">🔓 解密</button>' +
+      '</div>' +
+      '<div id="p6EncBox" class="pdf-panel">' +
+      '<div class="dropzone" id="p6EncDrop">' +
+      '<span class="pd-dz-ic">📄</span><b>选择或拖入 PDF</b><small>要加密的 PDF</small>' +
+      '<input type="file" id="p6EncFile" accept="application/pdf,.pdf" hidden />' +
+      '</div>' +
+      '<div id="p6EncCtl" hidden class="pdf-panel">' +
+      '<div class="pdf-form">' +
+      '<label class="pz-lab">用户密码<input class="inp" id="p6User" type="text" autocomplete="off" spellcheck="false" placeholder="打开文件时需要，必填" /></label>' +
+      '<label class="pz-lab">所有者密码<input class="inp" id="p6Owner" type="text" autocomplete="off" spellcheck="false" placeholder="留空 = 与用户密码相同" /></label>' +
+      '</div>' +
+      '<div class="p6-perms">' +
+      '<label class="chk-row"><input type="checkbox" id="p6Print" checked><span>允许打印</span></label>' +
+      '<label class="chk-row"><input type="checkbox" id="p6Copy"><span>允许复制</span></label>' +
+      '<label class="chk-row"><input type="checkbox" id="p6Mod"><span>允许编辑</span></label>' +
+      '</div>' +
+      '<button class="btn btn-main" id="p6GoEnc" data-act="p6GoEnc" type="button">🔒 生成加密 PDF</button>' +
+      '<div class="pdf-stat" id="p6EncStat">加密采用 AES-256；加密后的文件用 Adobe Reader 打开会要求输入密码</div>' +
+      '</div>' +
+      '</div>' +
+      '<div id="p6DecBox" class="pdf-panel" hidden>' +
+      '<div class="dropzone" id="p6DecDrop">' +
+      '<span class="pd-dz-ic">🔓</span><b>选择或拖入加密 PDF</b><small>输入密码后另存为无密码版本</small>' +
+      '<input type="file" id="p6DecFile" accept="application/pdf,.pdf" hidden />' +
+      '</div>' +
+      '<div id="p6DecCtl" hidden class="pdf-panel">' +
+      '<label class="pz-lab pdf-wide">密码<input class="inp" id="p6DecPwd" type="text" autocomplete="off" spellcheck="false" placeholder="打开该 PDF 的密码" /></label>' +
+      '<button class="btn btn-main" id="p6GoDec" data-act="p6GoDec" type="button">🔓 解密并下载</button>' +
+      '<div class="pdf-stat" id="p6DecStat">解密后得到的新文件不再需要密码</div>' +
+      '</div>' +
+      '</div>' +
+      '</div>' +
+
+      '<p class="cd-note">所有处理均在本机浏览器完成，文件不会上传到任何服务器。</p>' +
       '</div>';
   }
 
@@ -585,6 +1029,10 @@
       drop.classList.remove('drag');
       if (e.dataTransfer.files && e.dataTransfer.files.length) handler(e.dataTransfer.files);
     });
+  }
+
+  function isPdfFile(f) {
+    return /^application\/pdf$/.test(f.type || '') || /\.pdf$/i.test(f.name || '');
   }
 
   function showP2Ctl() {
@@ -636,6 +1084,70 @@
     $$('.pd-tab', root).forEach(b => b.addEventListener('click', () => setTab(b.dataset.tab)));
     $('#p3Seg', root).addEventListener('click', e => { const b = e.target.closest('[data-sub]'); if (b) setSub3(b.dataset.sub); });
     $('#p4Seg', root).addEventListener('click', e => { const b = e.target.closest('[data-sub]'); if (b) setSub4(b.dataset.sub); });
+    $('#p6Seg', root).addEventListener('click', e => { const b = e.target.closest('[data-sub]'); if (b) setSub6(b.dataset.sub); });
+
+    /* —— Step 15 · B1 签名 / 盖章 —— */
+    bindDrop('#p5Drop', '#p5File', files => {
+      const f = files[0];
+      if (!f) return;
+      if (!isPdfFile(f)) { LB.toast('请选择 PDF 文件', 'warn'); return; }
+      openP5Pdf(f);
+    });
+    bindDrop('#p5SigDrop', '#p5SigFile', files => {
+      const f = files[0];
+      if (!f) return;
+      loadSigImage(f)
+        .then(() => LB.toast('签名图已就绪（白底已去掉），点预览图放置', 'ok'))
+        .catch(e => LB.toast((e && e.message) || '图片解码失败', 'err'));
+    });
+    $('#p5Stage', root).addEventListener('click', placeAt);
+    $('#p5Prev', root).addEventListener('click', async () => {
+      if (!p5Pdf || p5PageNo <= 1) return;
+      p5PageNo--;
+      $('#p5PageInfo', root).textContent = '第 ' + p5PageNo + ' / ' + p5PageCount + ' 页';
+      await renderSigStage();
+    });
+    $('#p5Next', root).addEventListener('click', async () => {
+      if (!p5Pdf || p5PageNo >= p5PageCount) return;
+      p5PageNo++;
+      $('#p5PageInfo', root).textContent = '第 ' + p5PageNo + ' / ' + p5PageCount + ' 页';
+      await renderSigStage();
+    });
+    $('#p5Scale', root).addEventListener('input', e => {
+      if (!p5Place) return;
+      const rw = clamp((parseFloat(e.target.value) || 28) / 100, 0.05, 0.9);
+      p5Place.rw = rw;
+      p5Place.rx = clamp(p5Place.rx, 0, Math.max(0, 1 - rw));
+      layoutSig();
+      renderSigHint();
+    });
+    $('#p5Angle', root).addEventListener('input', e => {
+      p5Angle = parseFloat(e.target.value) || 0;
+      applySigAngle();
+      renderSigHint();
+    });
+    $('#p5All', root).addEventListener('change', e => {
+      p5AllPages = e.target.checked;
+      $('#p5PagesRow', root).hidden = p5AllPages;
+    });
+
+    /* —— Step 15 · B2 加密 / 解密 —— */
+    bindDrop('#p6EncDrop', '#p6EncFile', files => {
+      const f = files[0];
+      if (!f) return;
+      if (!isPdfFile(f)) { LB.toast('请选择 PDF 文件', 'warn'); return; }
+      p6EncFile = f;
+      $('#p6EncCtl', root).hidden = false;
+      $('#p6EncStat', root).textContent = '已选择：' + f.name + '，设置密码后点「生成加密 PDF」';
+    });
+    bindDrop('#p6DecDrop', '#p6DecFile', files => {
+      const f = files[0];
+      if (!f) return;
+      if (!isPdfFile(f)) { LB.toast('请选择 PDF 文件', 'warn'); return; }
+      p6DecFile = f;
+      $('#p6DecCtl', root).hidden = false;
+      $('#p6DecStat', root).textContent = '已选择：' + f.name + '，输入密码后点「解密并下载」';
+    });
 
     root.addEventListener('click', e => {
       const b = e.target.closest('[data-act]');
@@ -655,6 +1167,9 @@
       else if (act === 'p3Del') { p3Files.splice(i, 1); renderP3List(); }
       else if (act === 'p4GoN') addPageNumbers();
       else if (act === 'p4GoW') addWatermark();
+      else if (act === 'p5Go') sigToPDF();
+      else if (act === 'p6GoEnc') encryptPDF();
+      else if (act === 'p6GoDec') decryptPDF();
     });
     root.addEventListener('click', e => { if (e.target.closest('[data-back]')) LB.hash.go('home'); });
 
@@ -675,6 +1190,11 @@
     p3SplitFile = null;
     p4NumFile = null;
     p4WmFile = null;
+    /* Step 15：签名 / 加密状态一并清掉（PDF.js 文档要显式销毁，否则 worker 侧资源不释放） */
+    if (p5Pdf) { try { p5Pdf.destroy(); } catch (_) {} }
+    p5File = null; p5Pdf = null; p5Sig = null; p5Place = null;
+    p5PageNo = 1; p5PageCount = 0; p5Angle = 0; p5AllPages = true;
+    p6EncFile = null; p6DecFile = null; p6Sub = 'enc';
     rootEl = null;
   }
 

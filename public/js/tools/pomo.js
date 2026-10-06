@@ -18,146 +18,22 @@
   let endAt = 0;
   let actx = null;
 
-  /* ============ Step 6F：白噪音 ============
-     全部用 Web Audio 实时合成，不加载任何音频文件 ——
-     这样离线可用、零体积，也不会有版权/加载失败问题。
-     声音是「一次性生成 2 秒 buffer + loop 播放」，
-     不是每帧重算：CPU 占用恒定，长时间专注也不会烧 CPU。 */
-  let noiseSrc = null;      /* 当前正在播的 BufferSource */
-  let noiseGain = null;     /* 音量节点 */
-  let noiseType = '';       /* 当前音效 key，空串 = 无声*/
-  const KEY_SOUND = 'litebox_pomo_sound';
-  const KEY_AUTOPLAY = 'litebox_pomo_autoplay';
-
-  const SOUNDS = {
-    rain:  { name: '🌧 雨声' },
-    ocean: { name: '🌊 海浪' },
-    white: { name: '⚪ 白噪音' },
-    pink:  { name: '🩷 粉噪音' }
-  };
-
-  /* 合成 2 秒循环 buffer。kind 决定波形算法。
-     2 秒是折中：太短循环时能听出接缝，太长生成慢、白占内存。 */
-  function buildNoiseBuffer(ctx, kind) {
-    const sr = ctx.sampleRate;
-    const len = 2 * sr;
-    const buf = ctx.createBuffer(1, len, sr);
-    const d = buf.getChannelData(0);
-
-    if (kind === 'white') {
-      /* 白噪音：纯随机，能量在各频率上均匀分布 */
-      for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
-    } else if (kind === 'pink') {
-      /* 粉噪音：1/f 谱，能量随频率下降，听感更柔和、不刺耳。
-         用Paul Kellet 的经典 7 阶滤波器近似（-3dB/octave），
-         比直接白噪更接近真实的雨声底噪。 */
-      let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
-      for (let i = 0; i < len; i++) {
-        const w = Math.random() * 2 - 1;
-        b0 = 0.99886 * b0 + w * 0.0555179;
-        b1 = 0.99332 * b1 + w * 0.0750759;
-        b2 = 0.96900 * b2 + w * 0.1538520;
-        b3 = 0.86650 * b3 + w * 0.3104856;
-        b4 = 0.55000 * b4 + w * 0.5329522;
-        b5 = -0.7616 * b5 - w * 0.0168980;
-        d[i] = (b0 + b1 + b2 + b3 + b4 + b5 + b6 + w * 0.5362) * 0.11;
-        b6 = w * 0.115926;
-      }
-    } else if (kind === 'rain') {
-      /* 雨声：白噪 + 稀疏脉冲（雨滴），
-         再经低通滤掉高频「沙」感，让它听起来像连绵的雨。 */
-      for (let i = 0; i < len; i++) {
-        d[i] = (Math.random() * 2 - 1) * 0.35;
-        if (Math.random() < 0.0004) d[i] = (Math.random() * 2 - 1) * 0.9;
-      }
-    } else if (kind === 'ocean') {
-      /* 海浪：白噪 × 慢速包络（0.15Hz 一涨一落）。
-         循环无缝的关键：包络周期必须整除 buffer 长度，
-         这里用 len/sr 反推周期数，保证接缝处相位连续。 */
-      const waves = 3;                       /* 2 秒内 3 个浪头 */
-      for (let i = 0; i < len; i++) {
-        const phase = (i / len) * waves * Math.PI * 2;
-        /* 0.5+0.5sin → 0~1，再用 sin 塑形出「涨潮感」而不是机械的方波 */
-        const env = Math.pow(0.5 + 0.5 * Math.sin(phase), 1.6);
-        d[i] = (Math.random() * 2 - 1) * env * 0.75;
-      }
-    }
-    return buf;
-  }
-
-  function stopNoise() {
-    if (noiseSrc) {
-      try { noiseSrc.stop(0); } catch (_) { /* 已停止的节点再 stop 会抛，忽略 */ }
-      try { noiseSrc.disconnect(); } catch (_) {}
-      noiseSrc = null;
-    }
-    if (noiseGain) { try { noiseGain.disconnect(); } catch (_) {} noiseGain = null; }
-    noiseType = '';
-  }
-
-  function setSound(kind) {
-    /* 同一个声音重复点击不重启 —— 免得每次都「咔」一声 */
-    if (kind === noiseType) return;
-    stopNoise();
-    if (!kind || !SOUNDS[kind]) return;
-    try {
-      const AC = window.AudioContext || window.webkitAudioContext;
-      if (!AC) { LB.toast('当前浏览器不支持 Web Audio', 'err'); return; }
-      /* 复用 pomo 已有的 actx（响铃也在用），不重复创建 */
-      actx = actx || new AC();
-      if (actx.state === 'suspended') actx.resume();
-
-      const src = actx.createBufferSource();
-      src.buffer = buildNoiseBuffer(actx, kind);
-      src.loop = true;
-
-      const gain = actx.createGain();
-      gain.gain.value = 0.25;
-
-      let node = src;
-      if (kind === 'rain') {
-        /* 雨声加低通，把白噪的刺耳高频压掉 */
-        const lp = actx.createBiquadFilter();
-        lp.type = 'lowpass';
-        lp.frequency.value = 2000;
-        src.connect(lp);
-        node = lp;
-      }
-      node.connect(gain).connect(actx.destination);
-      src.start(0);
-      noiseSrc = src; noiseGain = gain; noiseType = kind;
-    } catch (e) {
-      noiseSrc = null; noiseGain = null; noiseType = '';
-      LB.toast('音效启动失败：' + (e && e.message ? e.message : '未知错误'), 'err');
-    }
-  }
-
-  function autoplayOn() {
-    return $('#pzAutoPlay', rootEl) ? $('#pzAutoPlay', rootEl).checked : true;
-  }
-
-  /* 试听定时器句柄：未开始专注时点声音只试听 2.5 秒。
-     必须留句柄在 unmount 里清掉 —— 否则离开页面后这个回调仍会执行 setSound('')，     那时 actx 已被close，重新访问页面会报「AudioContext 已关闭」的错。 */
-  let previewTimer = null;
-
-  /* 专注开始/暂停时的联动入口 */
-  function syncSound() {
-    const want = $('#pzSound', rootEl).value;
-    if (running && mode === 'focus' && autoplayOn()) setSound(want);
-    else setSound('');
-  }
-
-  function renderSoundUi() {
-    const sel = $('#pzSound', rootEl);
-    if (!sel) return;
-    const cur = LB.storage.get(KEY_SOUND, '');
-    sel.value = SOUNDS[cur] ? cur : '';
-    const ap = $('#pzAutoPlay', rootEl);
-    if (ap) ap.checked = LB.storage.get(KEY_AUTOPLAY, true) !== false;
-    setSound(running && mode === 'focus' && ap.checked ? sel.value : '');
-  }
+  /* ============ Step 13 · B4：白噪音已拆为独立工具 ============
+     Step 6F 在这里用 Web Audio 合成背景音，现在整套音源（CDN 录音 + 合成降级、
+     音量、定时关闭、播放历史）都搬到了 #noise 独立工具。
+     番茄钟只保留完成提示音（ring3），专注时的背景音改为引导去白噪音工具。
+     原来的合成算法已迁到 js/tools/noise.js，这里不再保留任何播放逻辑。 */
+  const NOISE_HINT =
+    '<div class="card tool-sec set-card pz-noise-hint">' +
+    '<span class="tool-lab">背景音</span>' +
+    '<p class="cd-note">专注时的雨声、海浪、白噪音已独立成「白噪音」工具，音量与定时关闭也在那里调。</p>' +
+    '<div class="set-btns">' +
+    '<a class="btn btn-ghost btn-sm" href="#noise">🌧 去白噪音工具播放</a>' +
+    '</div>' +
+    '</div>';
 
   const pad = n => String(n).padStart(2, '0');
+
   const fmt = s => pad(Math.floor(s / 60)) + ':' + pad(s % 60);
   const fmtMin = m => (Number.isInteger(m) ? m : +m.toFixed(1)) + ' 分';
 
@@ -236,7 +112,6 @@
     total = Math.max(6, Math.round((m === 'focus' ? custom.focusMin : custom.breakMin) * 60));
     remain = total;
     stopTimer();
-    setSound('');         /* Step 6F：切模式必须停音，否则休息时还响着雨声很吵 */
     $$('#pzSeg .seg-btn', rootEl).forEach(b => b.classList.toggle('on', b.dataset.v === m));
     renderState();
     renderTime();
@@ -248,7 +123,6 @@
     running = true;
     if (timer) clearInterval(timer);
     timer = setInterval(tick, 250);
-    syncSound();          /* Step 6F：专注开始 → 按设置起播背景音 */
     renderState();
     renderTime();
   }
@@ -256,7 +130,6 @@
   function pause() {
     remain = Math.max(0, Math.round((endAt - Date.now()) / 1000));
     stopTimer();
-    syncSound();          /* Step 6F：暂停 → 停止背景音 */
     renderState();
     renderTime();
   }
@@ -264,7 +137,6 @@
   function reset() {
     remain = total;
     stopTimer();
-    setSound('');         /* Step 6F：重置一律静音 */
     renderState();
     renderTime();
   }
@@ -345,20 +217,7 @@
       '</div>' +
       '</div>' +
       '<p class="cd-note">基于时间戳计时，切后台 / 锁屏回来不漂移；完成自动切换专注 ⇄ 休息并响铃三声；今日统计保存在本设备浏览器中。</p>' +
-      '<div class="card pz-sound">' +
-      '<span class="tool-lab">背景音（Web Audio 实时合成 · 离线可用）</span>' +
-      '<div class="pz-sound-row">' +
-      '<select class="inp" id="pzSound" aria-label="背景音">' +
-      '<option value="">无</option>' +
-      '<option value="rain">🌧 雨声</option>' +
-      '<option value="ocean">🌊 海浪</option>' +
-      '<option value="white">⚪ 白噪音</option>' +
-      '<option value="pink">🩷 粉噪音</option>' +
-      '</select>' +
-      '<label class="chk-row pz-auto"><input type="checkbox" id="pzAutoPlay" checked> 专注时自动播放</label>' +
-      '</div>' +
-      '<p class="cd-note" id="pzSoundHint">声音由浏览器实时合成，不加载任何音频文件；暂停 / 休息 / 切走页面会自动停止。</p>' +
-      '</div>' +
+      NOISE_HINT +
       '</div>'
     );
   }
@@ -393,35 +252,13 @@
       setMode(b.dataset.v);
     });
     $('#pzApply', root).addEventListener('click', applyCustom);
-    /* Step 6F：背景音选择 */
-    renderSoundUi();
-    $('#pzSound', root).addEventListener('change', e => {
-      LB.storage.set(KEY_SOUND, e.target.value);
-      syncSound();
-      /* 立即试听：未开始专注时也能听到效果，方便挑声音 */
-      if (previewTimer) { clearTimeout(previewTimer); previewTimer = null; }
-      if (!running && e.target.value) {
-        setSound(e.target.value);
-        previewTimer = setTimeout(() => {
-          previewTimer = null;
-          if (!running) setSound('');   /* 已离开页面则 unmount 已清空 actx，这里不再动 */
-        }, 2500);
-      }
-    });
-    $('#pzAutoPlay', root).addEventListener('change', e => {
-      LB.storage.set(KEY_AUTOPLAY, e.target.checked);
-      syncSound();
-    });
     root.addEventListener('click', e => { if (e.target.closest('[data-back]')) LB.hash.go('home'); });
   }
 
   function unmount() {
     stopTimer(); /* 清定时器 + 恢复原标题，切页后不得继续跑 */
-    if (previewTimer) { clearTimeout(previewTimer); previewTimer = null; }
-    /* Step 6F：必须停音并关掉 AudioContext ——
-       离开页面后声音还在放是最容易被用户当成 bug 的问题。
-       定时器只是停止轮询，AudioContext 不关会一直持有系统音频资源。 */
-    stopNoise();
+    /* Step 13 · B4：背景音已交给白噪音工具，这里只关自己的完成提示音 AudioContext。
+       AudioContext 不关会一直持有系统音频资源。 */
     if (actx) { try { actx.close(); } catch (_) {} actx = null; }
     rootEl = null;
   }
