@@ -2964,7 +2964,7 @@ button.pt-cell:hover{transform:translateY(-2px) scale(1.06);z-index:2;box-shadow
   background:var(--rd-page-bg,var(--rd-paper));
   color:var(--rd-ink-live,var(--rd-ink));
 }
-.reader-content::-webkit-scrollbar{width:0}
+.reader-content::-webkit-scrollbar{width:0;height:0}
 .reader-content{scrollbar-width:none}
 .reader-content h2.rd-ch{
   font-size:1.15em;font-weight:800;margin:0 0 1em;padding-bottom:.5em;
@@ -2972,9 +2972,30 @@ button.pt-cell:hover{transform:translateY(-2px) scale(1.06);z-index:2;box-shadow
 }
 .reader-content p{margin:0 0 .9em;text-indent:2em}
 
-/* Step 23 · 一：tap（点击翻页）的整页跳转刻意不做 scroll-behavior:smooth ——
-   动画途中的 scrollTop 会把"当前页码"读错，连点就乱（Step 21 实测踩过）。
-   旧的 .slide-up-mode scroll-snap 锚点与 .rd-turn 仿真翻页 3D 覆盖层已随两种模式一起删除。 */
+/* Step 24 · 一：tap（点击翻页）改用浏览器原生分栏 —— 一栏 = 一页。
+   栏宽 = --rd-colw（reader.js 按容器实际渲染宽度写入），栏距 0，
+   于是「翻一整页」就是横向滚动恰好一个 clientWidth：
+   步长由布局引擎保证，不再出现旧 pageTops 那种 129 / 353 / 421 忽大忽小。
+   左右 padding 归零（否则栏宽 ≠ 滚动步长会错位），边距改由段落 margin 提供。
+   超长段落由分栏自动跨栏续排，不丢字。
+   旧的 scroll-snap 锚点与 .rd-turn 仿真翻页 3D 覆盖层已随两种模式一起删除。 */
+.reader-content.tap-mode{
+  overflow-x:auto;overflow-y:hidden;
+  padding-left:0;padding-right:0;
+  column-width:var(--rd-colw,100%);
+  column-gap:0;
+  column-fill:auto;
+}
+.reader-content.tap-mode p,
+.reader-content.tap-mode h2.rd-ch{
+  margin-left:var(--sp-5);margin-right:var(--sp-5);
+}
+/* 不需要「末尾垫一栏」：分栏是离散的，scrollWidth 恒为栏宽的整数倍，
+   最后一页的滚动目标 (页数-1)×栏宽 恰好等于 maxScroll，不会被 clamp 成半页。
+   （实测 3 / 7 / 25 / 60 / 133 段五种长度，栏数均为整数倍、无空白尾页。） */
+
+/* Step 23 · 一：tap 的整页跳转刻意不做 scroll-behavior:smooth ——
+   动画途中的滚动位置会把"当前页码"读错，连点就乱（Step 21 实测踩过）。 */
 
 /* 亮度叠加层：内容之上的半透明暗色（颜色取 tokens 阅读夜间底色），不拦截点击 */
 .rd-dim{

@@ -408,6 +408,10 @@
     cur = b;
     readSecAcc = 0;
     chIdx = Math.min(b.progress && b.progress.chapter || 0, b.chapters.length - 1);
+    /* ★ 必须在这里就快照进度：renderChapter() → paginateContent() → syncProgress()
+       会把 cur.progress 覆写成初始值（page 0），等到后面再读就永远是 0，
+       翻页模式下退出重进的位置因此会丢（Step 24 实测踩到）。 */
+    const pr = Object.assign({}, b.progress || {});
     /* 每本书独立设置：书内设置 → 全局默认 → 出厂默认 */
     settings = Object.assign({}, DEF_SETTINGS, globalSettings, b.settings || {});
     if (settings.line && LINES.indexOf(settings.line) === -1) {
@@ -416,17 +420,16 @@
     if (settings.font === 'ping') settings.font = 'sys';
     /* Step 23 · 一：旧 mode 值（page / slide-up / curve）迁移到剩下的两种 */
     settings.mode = normalizeMode(settings.mode);
-    syncModeClass();                   /* 类名跟着设置走，不能停在默认的 scroll-mode */
-    syncModeClass();                   /* 存储里的模式要刷到类名上，不能停在 HTML 默认的 scroll-mode */
     $('#rdUpload', rootEl).hidden = true;
     $('#rdRead', rootEl).hidden = false;
+    /* 类名/栏宽要在阅读区可见之后再刷：隐藏时 clientWidth 是 0，栏宽会算错 */
+    syncModeClass();
     $('#rdTitle', rootEl).textContent = b.name;
     setBarsHidden(false);                /* 进书先露出工具栏，再点中间收起 */
     renderChapter();
     renderSettings();
     renderToc();
-    /* 恢复上次位置：滚动看 scrollTop，点击翻页看页码 */
-    const pr = b.progress || {};
+    /* 恢复上次位置：滚动看 scrollTop，点击翻页看页码（pr 已在函数开头快照） */
     setTimeout(() => {
       const v = $('.reader-content', rootEl);
       if (!v || !cur) return;
@@ -464,6 +467,7 @@
     view.innerHTML = '<h2 class="rd-ch">' + esc(ch.title) + '</h2>' +
       paras.map(p => '<p>' + esc(p) + '</p>').join('');
     view.scrollTop = 0;
+    view.scrollLeft = 0;
     pageIdx = 0;
     $('#rdChName', rootEl).textContent = ch.title;
     $('#rdChIdx', rootEl).textContent = (chIdx + 1) + ' / ' + cur.chapters.length;
@@ -521,8 +525,10 @@
     const n = pageCount();
     cur.progress = {
       chapter: chIdx,
-      scroll: pagedTap ? Math.min(pageTops[pageIdx] || 0, Math.max(0, view.scrollHeight - view.clientHeight)) : view.scrollTop,
-      page: pagedTap ? pageIdx : Math.min(n - 1, Math.max(0, pageIndexFromScroll())),
+      /* tap 态正文横向分栏，纵向 scrollTop 恒为 0：位置靠 page 记；
+         scroll 态才是真实纵向偏移。 */
+      scroll: pagedTap ? 0 : view.scrollTop,
+      page: pagedTap ? pageIdx : Math.min(n - 1, Math.max(0, Math.round(view.scrollTop / pageHeight()))),
       percent: Math.round(p)
     };
   }
@@ -622,41 +628,87 @@
   /* 兼容旧调用点 */
   function closeSheets() { PanelManager.close(); }
 
-  /* ============ 翻页模式（Step 23 · 一：4 种精简为 2 种） ============
+  /* ============ 翻页模式（Step 23 · 一定型，Step 24 · 一修复分页） ============
      scroll  连续滚动（默认）
-     tap     点击翻页：按容器可视高度切页，点内容区左 / 右 1/3 整页翻，中间 1/3 切工具栏
+     tap     点击翻页：点内容区左 / 右 1/3 整页翻，中间 1/3 切工具栏
      ★ 「上下滑动」（与滚动重复）与「仿真翻页」（3D 覆盖层效果不好）已整体删除。
-     ★ 分页只记录"每页起点的内容坐标"（pageTops），不把 DOM 拆成一页页盒子：
-       超长段落还能按整页高度补切滚动点，翻页不会跳过它的内容。
+     ★ Step 24：分页不再自己算「每页起点坐标」（旧 pageTops 按 DOM 块边界切页，
+       块与块之间的 margin 会被当成页高的一部分，步长忽大忽小 —— 实测 129 / 353 /
+       421 / 568 交替，比一屏可见高 568 小得多，于是"翻页只挪一点点"和"内容重叠"），
+       改为浏览器原生的 CSS 多栏分栏（column-width = 容器宽、column-fill:auto），
+       每一栏就是一页，翻页 = 横向滚动整整一栏宽。
      MODES / MODE_ORDER / MIGRATE_MODE 定义在文件顶部（读设置时就要用到）。 */
 
-  let pageTops = [];      /* 每页起始的内容坐标 */
   let pageIdx = 0;
   let pendingPageEnd = false;   /* 上一章后停在最后一页 */
 
   function isPaged() { return settings.mode === 'tap'; }
-  function pageCount() { return pageTops.length; }
 
-  /* 模式类名与 settings.mode 对齐。applyPageMode 与 openBook 共用：
-     打开书时若只读设置不刷类名，界面会停在 HTML 默认的 scroll-mode 上
-     （分页逻辑已经按 tap 走，但 .tap-mode 类缺失 → 光标/样式不一致）。 */
+  /* tap 态的「一页」就是「一栏」：宽度取容器实际渲染宽（不含左右 padding，
+     tap 态把左右 padding 归零，见 tools.css .reader-content.tap-mode），
+     所以滚动步长和栏宽恒等，不会出现按 innerWidth / 固定 px 算错的情况。 */
+  function tapView() { return rootEl ? $('.reader-content', rootEl) : null; }
+  function pageWidth() {
+    const v = tapView();
+    return v ? Math.max(1, v.clientWidth) : 1;
+  }
+  function pageCount() {
+    const v = tapView();
+    if (!v) return 0;
+    /* 分栏是离散的：scrollWidth 恒为栏宽整数倍，除出来就是栏数（= 页数）。
+       用 round 而不是 ceil，避免亚像素宽度把最后一点余量算成多一页空白。 */
+    return Math.max(1, Math.round(v.scrollWidth / pageWidth()));
+  }
+
+  /* 模式类名与 settings.mode 对齐，并在进入 tap 时把栏宽写进 CSS 变量
+     （运行时几何数据，和主题色一样只作为变量传给样式表，不写内联样式）。 */
   function syncModeClass() {
     const content = $('.reader-content', rootEl);
     if (!content) return;
     content.classList.toggle('scroll-mode', settings.mode === 'scroll');
     content.classList.toggle('tap-mode', settings.mode === 'tap');
+    if (isPaged()) content.style.setProperty('--rd-colw', pageWidth() + 'px');
+  }
+
+  /* 让分栏按当前宽度重排（转屏 / 改字号 / 改行距都要重算），
+     并把页码对回原来的位置：栏数变了，同一页的滚动距离也必须重设。 */
+  function paginateContent(keepPage) {
+    const view = tapView();
+    if (!view) return;
+    if (!isPaged() || !cur) { view.style.removeProperty('--rd-colw'); return; }
+    const keep = keepPage !== undefined ? keepPage : pageIndexFromScroll();
+    view.style.setProperty('--rd-colw', pageWidth() + 'px');
+    /* 读一次几何量强制重排，showPage 里的 scrollWidth / 栏数才是新值 */
+    void view.scrollWidth;
+    showPage(keep);
   }
 
   function applyPageMode(mode) {
     const content = $('.reader-content', rootEl);
     if (!content) return;
-    settings.mode = normalizeMode(mode);
+    const next = normalizeMode(mode);
+    if (next === settings.mode) return;
+    /* 切模式前的位置：翻页态是页码，滚动态换算成页码 */
+    const keepPage = isPaged() ? pageIdx : Math.floor(content.scrollTop / pageHeight());
+    settings.mode = next;
     syncModeClass();
-    const keepY = pageTops[pageIdx] || 0;      /* 切模式前停在第几页，尽量保持 */
-    pageTops = [];
-    paginateContent();
-    if (isPaged()) showPage(0);
-    else content.scrollTop = Math.min(keepY, Math.max(0, content.scrollHeight - content.clientHeight));
+    if (isPaged()) {
+      /* 滚动 → 翻页：分栏排好后停在同一页 */
+      paginateContent(Math.min(keepPage, pageCount() - 1));
+    } else {
+      /* 翻页 → 滚动：栏宽变量要撤掉，否则正文仍被拦成横向分栏 */
+      content.style.removeProperty('--rd-colw');
+      content.scrollTop = Math.min(keepPage * pageHeight(),
+        Math.max(0, content.scrollHeight - content.clientHeight));
+    }
+  }
+
+  /* 一屏可读到的高度（用来把滚动位置换算成大致页码） */
+  function pageHeight() {
+    const v = tapView();
+    if (!v) return 1;
+    const cs = getComputedStyle(v);
+    return Math.max(120, v.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom));
   }
 
   function setPageMode(mode) {
@@ -669,61 +721,38 @@
   }
 
   /* 跳到第 i 页（tap 用）。刻意不加 scroll-behavior:smooth ——
-     动画途中的 scrollTop 会把"当前页码"读错，连点就乱（Step 21 实测踩过）。 */
+     动画途中的 scrollLeft 会把"当前页码"读错，连点就乱（Step 21 实测踩过）。 */
   function showPage(i) {
-    const view = $('.reader-content', rootEl);
-    if (!view || !pageTops.length) return;
-    pageIdx = Math.max(0, Math.min(pageTops.length - 1, i));
-    view.scrollTop = Math.min(pageTops[pageIdx], Math.max(0, view.scrollHeight - view.clientHeight));
+    const view = tapView();
+    if (!view || !isPaged()) return;
+    pageIdx = Math.max(0, Math.min(pageCount() - 1, i));
+    /* 步长 = 一栏宽 = clientWidth：浏览器算好的几何，不会多翻也不会少翻 */
+    view.scrollLeft = Math.min(pageIdx * pageWidth(),
+      Math.max(0, view.scrollWidth - view.clientWidth));
     syncProgress();
   }
 
-  /* 按容器可视高度切页 */
-  function paginateContent() {
-    pageTops = [];
-    if (!rootEl) return;
-    const view = $('.reader-content', rootEl);
-    if (!view) return;
-    if (!isPaged() || !cur) return;
-    const cs = getComputedStyle(view);
-    const avail = Math.max(120, view.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom));
-    const base = view.getBoundingClientRect().top - view.scrollTop;   /* 内容坐标 0 点 */
-    const blocks = [];
-    Array.prototype.forEach.call(view.children, el => {
-      if (el.nodeType !== 1) return;
-      const r = el.getBoundingClientRect();
-      const top = r.top - base;
-      blocks.push({ el: el, top: top, bottom: top + r.height + parseFloat(getComputedStyle(el).marginBottom || 0) });
-    });
-    pageTops = [0];
-    let start = 0;
-    blocks.forEach(b => {
-      if (b.top > start && b.bottom - start > avail) { pageTops.push(b.top); start = b.top; }
-      while (b.bottom - start > avail) { start += avail; pageTops.push(start); }
-    });
-    pageIdx = Math.min(pageIdx, pageTops.length - 1);
-  }
-
-  /* 当前页码以实际滚动位置为准（用户也可能用滚轮 / 进度条跳） */
+  /* 当前页码以实际滚动位置为准（用户也可能用滚轮 / 触摸板 / 进度条跳） */
   function pageIndexFromScroll() {
-    const view = $('.reader-content', rootEl);
-    const y = (view ? view.scrollTop : 0) + 8;
-    let i = 0;
-    for (let k = 0; k < pageTops.length; k++) if (pageTops[k] <= y) i = k;
-    return i;
+    const view = tapView();
+    if (!view) return 0;
+    return Math.max(0, Math.min(pageCount() - 1, Math.round(view.scrollLeft / pageWidth())));
   }
 
   /* 点击翻页：dir=-1 上一页 / +1 下一页；越界则换章。返回 true 表示本次点击已被翻页消化 */
   function turnPage(dir) {
-    if (!pageTops.length) return false;
+    if (!isPaged()) return false;
+    const view = tapView();
+    if (!view) return false;
     const base = pageIndexFromScroll();
     const next = base + dir;
     if (next < 0) {
       if (cur && chIdx > 0) { pendingPageEnd = true; prevChapter(); }
-      else LB.toast('已经是第一章了', 'info');
+      else LB.toast('已经在第一页了', 'info');
       return true;
     }
-    if (next >= pageTops.length) {
+    if (next > pageCount() - 1) {
+      /* 末页再点向右：不再空滚（分栏保证末页目标可达，这里直接交给换章逻辑） */
       if (cur && chIdx < cur.chapters.length - 1) nextChapter();
       else LB.toast('已经是最后一页了', 'info');
       return true;
@@ -987,7 +1016,6 @@
         showPage(Math.round(pct * Math.max(0, pageCount() - 1)));
       } else {
         v.scrollTop = (v.scrollHeight - v.clientHeight) * pct;
-        if (isPaged()) pageIdx = pageIndexFromScroll();
         syncProgress();
       }
     });
@@ -1041,12 +1069,13 @@
 
   const onResize = LB.dom.debounce(() => { if (cur) rePaginate(); }, 200);
 
-  /* 容器高度变了（转屏 / 窗口缩放）→ 重新切页并把页码对回原位置 */
+  /* 容器宽度变了（转屏 / 窗口缩放）→ 栏宽与栏数都要重算，页码对回原位置。
+     这里用逻辑页码 pageIdx 而不是从 scrollLeft 反算：resize 之后 clientWidth
+     已是新值，而 scrollLeft 还是旧栏宽下的像素，反算会错位。 */
   function rePaginate() {
     if (!cur || !isPaged()) return;
-    const keep = pageIndexFromScroll();
-    paginateContent();
-    showPage(Math.min(keep, Math.max(0, pageCount() - 1)));
+    /* showPage 内部会按新栏数 clamp，这里只负责把位置对回去 */
+    paginateContent(pageIdx);
     syncProgress();
   }
 
@@ -1071,7 +1100,6 @@
     saveAll();
     books = [];
     cur = null;
-    pageTops = [];
     pageIdx = 0;
     rootEl = null;
   }

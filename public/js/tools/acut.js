@@ -258,13 +258,18 @@
     stat.textContent = '准备中…';
     try {
       const ext = (trFile.name.split('.').pop() || 'bin').toLowerCase().replace(/[^a-z0-9]/g, '');
+      const firstRun = LB.ffmpeg.needsDownload();
       const blob = await LB.ffmpeg.run({
         file: trFile,
         inputName: 'in.' + ext,
         args: F.args(bitrate).concat(['out.' + F.ext]),
         outName: 'out.' + F.ext,
         mime: F.mime,
-        onStage: s => { stat.textContent = LB.ffmpeg.stageText(s); },
+        onStage: s => {
+          stat.textContent = LB.ffmpeg.stageText(s);
+          /* Step 24 · 二：core 走 CDN，首次要下 ~30MB，先提示一句免得以为卡住 */
+          if (s === 'core' && firstRun) LB.toast('首次使用需下载转码引擎（约 30MB），之后会缓存', 'info');
+        },
         onProgress: p => {
           fill.style.width = (p * 100).toFixed(0) + '%';
           stat.textContent = '⏳ 转码中 ' + (p * 100).toFixed(0) + '%';
