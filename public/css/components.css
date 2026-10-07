@@ -1,0 +1,231 @@
+/* =========================================================
+   LiteBox v5 · components.css — 组件库
+   全部只用 tokens 变量，暗色主题自动继承。
+   ========================================================= */
+
+/* ---------- 按钮 ---------- */
+.btn{
+  padding:10px 20px;border-radius:12px;font-weight:700;font-size:14px;
+  display:inline-flex;align-items:center;justify-content:center;gap:7px;
+  transition:transform var(--dur) var(--ease-spring),box-shadow 200ms,background 200ms,border-color 200ms,color 200ms;
+}
+.btn:active{transform:scale(.96)}
+.btn-main{background:var(--brand-grad);color:var(--on-accent);box-shadow:0 6px 18px color-mix(in srgb,var(--brand1) 32%,transparent)}
+.btn-ghost{background:transparent;border:1.5px solid var(--line);color:var(--fg2)}
+.btn-ghost:hover{border-color:color-mix(in srgb,var(--brand1) 45%,var(--line));color:var(--brand1)}
+.btn-ok{background:linear-gradient(120deg,var(--ok),color-mix(in srgb,var(--ok) 72%,var(--brand1)));color:var(--on-accent);box-shadow:0 6px 18px var(--ok-soft)}
+.btn-sm{padding:6px 13px;font-size:13px;border-radius:10px}
+
+/* ---------- 卡片 ---------- */
+.card{
+  background:var(--card);
+  border:1px solid var(--line);
+  border-radius:var(--radius);
+  box-shadow:var(--shadow-sm);
+  padding:14px; /* Step 5D：卡片一级子元素与边界至少 14px（自带 padding 的组合类如 .set-card 定义在后，覆盖同值不受影响） */
+}
+
+/* ---------- 胶囊 chip ---------- */
+.chip{
+  display:inline-flex;align-items:center;gap:6px;
+  padding:7px 15px;border-radius:var(--radius-pill);
+  border:1px solid var(--line);background:var(--card);
+  color:var(--fg2);font-size:13px;font-weight:600;
+  transition:transform var(--dur) var(--ease-spring),background 200ms,color 200ms,border-color 200ms;
+}
+.chip:active{transform:scale(.94)}
+.chip.on{
+  background:var(--brand-grad);border-color:transparent;
+  color:var(--on-accent);
+  box-shadow:0 5px 16px color-mix(in srgb,var(--brand1) 30%,transparent);
+}
+
+/* ---------- 表单行 ---------- */
+.field{display:flex;align-items:center;gap:12px;padding:10px 0}
+.field>label{font-size:13.5px;font-weight:600;color:var(--fg2);white-space:nowrap}
+.field>output{font-size:13px;font-weight:700;color:var(--brand1);min-width:44px;text-align:right;font-variant-numeric:tabular-nums}
+.field>input,.field>select,.field>textarea{flex:1;min-width:0}
+
+/* ---------- 分段控件 ---------- */
+.seg{
+  display:flex;gap:4px;padding:4px;border-radius:12px;
+  background:var(--card2);border:1px solid var(--line);
+}
+.seg>button{
+  flex:1;padding:7px 10px;border-radius:9px;font-size:13px;font-weight:700;
+  color:var(--fg3);
+  white-space:nowrap; /* Step 10：间距收敛后窄屏下标签不得折行，宁可等宽压缩 */
+  transition:background 200ms,color 200ms,box-shadow 200ms,transform var(--dur) var(--ease-spring);
+}
+.seg>button:active{transform:scale(.95)}
+.seg>button.on{
+  background:var(--card);color:var(--brand1);box-shadow:var(--shadow-sm);
+}
+
+/* ---------- 输入框 ---------- */
+.inp{
+  padding:10px 13px;border:1.5px solid var(--line);border-radius:10px;
+  background:var(--card2);color:var(--fg);font-size:14px;outline:none;width:100%;
+  transition:border-color 200ms,box-shadow 200ms,background 200ms;
+}
+.inp::placeholder{color:var(--fg3)}
+.inp:focus{border-color:var(--brand1);box-shadow:var(--ring)}
+.inp:disabled{opacity:.55}
+
+/* ---------- Toast ---------- */
+.toast{
+  display:flex;align-items:center;gap:9px;
+  padding:10px 18px;border-radius:var(--radius-pill);
+  background:var(--glass-bg);
+  backdrop-filter:blur(18px) saturate(1.8);-webkit-backdrop-filter:blur(18px) saturate(1.8);
+  border:1px solid var(--glass-border);
+  box-shadow:var(--shadow);
+  color:var(--fg);font-size:14px;font-weight:600;
+  opacity:0;transform:translateY(-8px);
+  transition:opacity .3s var(--ease-glide),transform .3s var(--ease-spring);
+}
+.toast::before{content:'';width:8px;height:8px;border-radius:50%;background:var(--brand1);flex:none}
+.toast-ok::before{background:var(--ok)}
+.toast-warn::before{background:var(--warn)}
+.toast-err::before{background:var(--err)}
+.toast.lb-in{opacity:1;transform:translateY(0)}
+.toast.out{opacity:0;transform:translateY(-8px)}
+
+/* ---------- 拖放区 ---------- */
+.dropzone{
+  padding:34px 18px;border-radius:var(--radius);
+  border:2px dashed var(--line);
+  background:var(--card2);
+  text-align:center;color:var(--fg3);font-size:14px;
+  transition:border-color 200ms,background 200ms,color 200ms,transform var(--dur) var(--ease-spring);
+}
+.dropzone:hover{border-color:color-mix(in srgb,var(--brand1) 55%,var(--line));color:var(--fg2)}
+.dropzone.drag{
+  border-color:var(--brand1);
+  background:var(--drop-bg);color:var(--brand1);
+  transform:scale(1.01);
+}
+
+/* ---------- 空状态（Step 8 统一：图标 + 标题 + 副标题 + 可选 CTA） ---------- */
+.empty-state{
+  text-align:center;padding:48px 20px;color:var(--fg3);
+}
+.empty-state .es-icon{
+  font-size:44px;margin-bottom:12px;opacity:.55;line-height:1;
+}
+.empty-state .es-icon svg{width:30px;height:30px}
+.empty-state .es-title{
+  font-size:15px;font-weight:700;color:var(--fg2);margin:0 0 6px;
+}
+.empty-state .es-sub{
+  font-size:14px;color:var(--fg3);margin:0 0 18px;line-height:1.6;
+}
+.empty-state .es-cta{min-width:120px}
+
+/* ---------- 工具页头部（返回 + 标题） ---------- */
+.tool-head{display:flex;align-items:center;gap:13px;padding:18px 0 6px}
+.tool-head h1{font-size:20px;font-weight:800;color:var(--fg);line-height:1.3}
+/* Step 8：工具页副标题从 12.5px/--fg3 抬到 14px/--fg2（对比度与可读性） */
+.tool-head p{font-size:14px;color:var(--fg2);line-height:1.5}
+.back{
+  flex:none;width:40px;height:40px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  background:var(--card);border:1px solid var(--line);color:var(--fg2);
+  box-shadow:var(--shadow-sm);
+  transition:transform var(--dur) var(--ease-spring),color 200ms,border-color 200ms;
+}
+.back svg{width:19px;height:19px}
+.back:active{transform:scale(.9)}
+
+/* ---------- 工具页头部 · 分享按钮（Step 6A 新增） ----------
+   用 flex + margin-left:auto 靠右，而非 absolute + top:34px 硬编码：
+   后者会在「副标题换行 / 无副标题」两种工具上错位，且各工具 head 高度不一致。 */
+.tool-head .share-btn{
+  flex:none;margin-left:auto;
+  width:40px;height:40px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  background:var(--card);border:1px solid var(--line);color:var(--fg2);
+  box-shadow:var(--shadow-sm);cursor:pointer;
+  transition:transform var(--dur) var(--ease-spring),color 200ms,border-color 200ms;
+}
+.tool-head .share-btn svg{width:18px;height:18px}
+.tool-head .share-btn:active{transform:scale(.9)}
+.tool-head .share-btn:hover{color:var(--brand1);border-color:var(--brand1)}
+/* 部分工具的标题块未设flex:1，靠 margin-left:auto 顶到最右；这里确保标题可压缩不溢出 */
+.tool-head > div{min-width:0}
+
+/* 独立使用的图标按钮（弹层、卡片等处的 .icon-btn） */
+.icon-btn{
+  flex:none;width:34px;height:34px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  background:var(--card2);border:1px solid var(--line);color:var(--fg3);cursor:pointer;
+  transition:transform var(--dur) var(--ease-spring),color 200ms,border-color 200ms;
+}
+.icon-btn svg{width:17px;height:17px}
+.icon-btn:active{transform:scale(.9)}
+.icon-btn:hover{color:var(--brand1);border-color:var(--brand1)}
+
+/* ---------- 弹层关闭按钮 / 内容行 ---------- */
+.sheet-x{
+  flex:none;width:34px;height:34px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  background:var(--card2);border:1px solid var(--line);color:var(--fg3);
+  transition:transform var(--dur) var(--ease-spring),color 200ms;
+}
+.sheet-x svg{width:16px;height:16px}
+.sheet-x:active{transform:scale(.88)}
+.sheet-row{
+  display:flex;align-items:center;gap:13px;
+  padding:13px 0;border-bottom:1px solid var(--line-soft);
+}
+.sheet-row:last-child{border-bottom:none}
+.sheet-row .row-ic{
+  flex:none;width:38px;height:38px;border-radius:12px;
+  display:flex;align-items:center;justify-content:center;
+  background:color-mix(in srgb,var(--brand1) 10%,transparent);color:var(--brand1);
+}
+.sheet-row .row-ic svg{width:19px;height:19px}
+.sheet-row .row-tx{flex:1;min-width:0}
+.sheet-row .row-tx b{display:block;font-size:14px;font-weight:700;color:var(--fg)}
+.sheet-row .row-tx small{display:block;font-size:12px;color:var(--fg3)}
+.sheet-row .row-side{font-size:12.5px;color:var(--fg3)}
+.sheet-row .btn-err{color:var(--err)}
+
+/* ---------- 首页占位提示 ---------- */
+.home-ph{padding-top:9vh;text-align:center;color:var(--fg3);font-size:14px}
+
+/* =========================================================
+   Step 10 · 状态变化微动效（通用类，任何工具可直接用）
+   ========================================================= */
+@keyframes lbFadeInUp{
+  from{opacity:0;transform:translateY(8px)}
+  to{opacity:1;transform:none}
+}
+@keyframes lbScaleIn{
+  from{opacity:0;transform:scale(.96)}
+  to{opacity:1;transform:scale(1)}
+}
+@keyframes lbNumberPop{
+  0%{transform:scale(1)}
+  40%{transform:scale(1.08)}
+  100%{transform:scale(1)}
+}
+.lb-fade-in-up{animation:lbFadeInUp var(--dur-base) var(--ease-out) both}
+.lb-scale-in{animation:lbScaleIn var(--dur-base) var(--ease-spring) both}
+.lb-pop{animation:lbNumberPop var(--dur-base) var(--ease-spring)}
+
+/* 尊重系统「减少动态效果」设置 */
+@media (prefers-reduced-motion:reduce){
+  .lb-fade-in-up,.lb-scale-in,.lb-pop{animation:none}
+}
+
+/* ---------- 危险操作确认态（Step 10 · LB.confirm） ----------
+   通用规则让图标小按钮（.nt-act / .td-del 等）至少变红；
+   双类 + .btn 双类提高特异性，覆盖 tools.css 里更晚声明的 color:inherit 与
+   .btn-main/.btn-ghost 底色，不用 !important（红线）。 */
+.lb-confirming.lb-confirming{color:var(--err)}
+.btn.lb-confirming{
+  background:var(--err);
+  color:var(--on-accent);
+  border-color:var(--err);
+}
