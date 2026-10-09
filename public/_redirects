@@ -1,3 +1,0 @@
-# 保留 hash 路由，不做重定向
-# 若将来切换到 history 路由，用此行将未匹配路径交给 index.html
-# /* /index.html 200
